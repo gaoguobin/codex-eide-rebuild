@@ -1,0 +1,11 @@
+.build/
+.tmp/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+dist/
+Thumbs.db
+Desktop.ini

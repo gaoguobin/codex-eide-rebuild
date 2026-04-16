@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compile Python sources
+        run: python -m compileall runtime/python scripts
+
+      - name: Check bridge JavaScript syntax
+        run: node --check runtime/bridge/extension.js
+
+      - name: Build bridge VSIX
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\runtime\bridge\build-vsix.ps1
+
+      - name: Sync runtime into skill bundle
+        run: python .\scripts\sync_skill_runtime.py --copy
+
+      - name: Verify runtime bundle sync
+        run: python .\scripts\sync_skill_runtime.py --check
+
+      - name: Run unit tests
+        run: python -m unittest discover -s .\runtime\tests -p "test_*.py"
+
+      - name: Verify generated artifacts are committed
+        run: git diff --exit-code

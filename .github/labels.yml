@@ -1,0 +1,12 @@
+- name: bug
+  color: "d73a4a"
+  description: Something is broken
+- name: enhancement
+  color: "a2eeef"
+  description: New feature or improvement
+- name: documentation
+  color: "0075ca"
+  description: Documentation update
+- name: maintenance
+  color: "5319e7"
+  description: Tooling, CI, or internal maintenance

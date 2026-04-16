@@ -1,0 +1,4 @@
+interface:
+  display_name: "EIDE Rebuild"
+  short_description: "Rebuild Embedded IDE workspaces and return full compiler logs"
+  default_prompt: "Use this skill when the user asks to compile, rebuild, or verify an Embedded IDE for VS Code workspace. It supports natural language prompts such as '你自己编译验证下对不对' and explicit forms such as 'EIDE rebuild C:\\work\\demo\\project.code-workspace'. Resolve the target path, then run `python scripts/eide_rebuild.py rebuild <workspace-or-project-path>`. Preserve the plain-text `[EIDE-CLI]` protocol and the full `compiler.log`. When the user explicitly asks for `subagent rebuild`, delegate execution to a worker subagent and keep the main conversation focused on the result."
