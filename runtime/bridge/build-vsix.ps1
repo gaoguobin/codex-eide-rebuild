@@ -19,7 +19,30 @@ function Write-Utf8File {
         [string]$Content
     )
 
-    [System.IO.File]::WriteAllText($LiteralPath, $Content, $utf8NoBom)
+    $normalizedContent = Normalize-LineEndings -Content $Content
+    [System.IO.File]::WriteAllText($LiteralPath, $normalizedContent, $utf8NoBom)
+}
+
+function Normalize-LineEndings {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Content
+    )
+
+    return (($Content -replace "`r`n", "`n") -replace "`r", "`n")
+}
+
+function Copy-NormalizedTextFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    $content = [System.IO.File]::ReadAllText($SourcePath)
+    Write-Utf8File -LiteralPath $DestinationPath -Content $content
 }
 
 function Get-ArchiveEntryName {
@@ -105,9 +128,11 @@ Remove-Item -LiteralPath $buildDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $extensionStageDir | Out-Null
 New-Item -ItemType Directory -Force $distDir | Out-Null
 
-Copy-Item -LiteralPath (Join-Path $bridgeRoot 'package.json') -Destination (Join-Path $extensionStageDir 'package.json')
-Copy-Item -LiteralPath (Join-Path $bridgeRoot 'extension.js') -Destination (Join-Path $extensionStageDir 'extension.js')
-Copy-Item -LiteralPath (Join-Path $bridgeRoot 'README.md') -Destination (Join-Path $extensionStageDir 'README.md')
+foreach ($fileName in @('package.json', 'extension.js', 'README.md')) {
+    Copy-NormalizedTextFile `
+        -SourcePath (Join-Path $bridgeRoot $fileName) `
+        -DestinationPath (Join-Path $extensionStageDir $fileName)
+}
 
 # --- VSIX metadata ---
 
