@@ -4,11 +4,33 @@
 
 ## 安装
 
+主入口：
+
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md`
+
+备用入口：
+
 ```powershell
 python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
 ```
 
-安装后重启 Codex。
+第一次安装通常会有一次权限批准。安装后重启 Codex。
+
+## 升级
+
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md
+```
+
+升级会更新本地 repo，并强制重装 bridge VSIX。升级后重启 Codex。
+
+## 卸载
+
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md
+```
+
+卸载会移除 skill、本地 repo、bridge 扩展和相关本地状态。卸载后重启 Codex。
 
 ## 自然语言入口
 
@@ -45,6 +67,7 @@ python -m unittest discover -s .\runtime\tests -p "test_*.py"
 
 ## 目录
 
+- `.codex/`：面向 Codex 的安装、升级、卸载文档
 - `runtime/`：共享运行时
 - `skills/eide-rebuild/`：Codex skill
 - `integrations/claude-code/`：Claude Code 第二阶段模板

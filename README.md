@@ -4,11 +4,33 @@
 
 ## Install
 
-Install the skill from GitHub, then restart Codex:
+Primary Codex install flow:
+
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md`
+
+Fallback GitHub installer:
 
 ```powershell
 python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
 ```
+
+The first install usually needs one approval to clone the repository and create the skill junction. Restart Codex after install.
+
+## Update
+
+Update an existing install with:
+
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md`
+
+This flow fast-forwards the local repo and force-reinstalls the bundled bridge VSIX. Restart Codex after update.
+
+## Uninstall
+
+Remove the skill, the local repo, the bridge extension, and the related bridge state with:
+
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md`
+
+This flow cleans the install back to a first-use baseline. Restart Codex after uninstall.
 
 ## Natural language entry
 
@@ -51,6 +73,7 @@ Explicit command-style prompts also work:
 ## Repository layout
 
 ```text
+.codex/             Codex-facing install, update, and uninstall guides
 runtime/
   bridge/          VS Code bridge extension source and VSIX pack script
   python/          Shared Python runner
