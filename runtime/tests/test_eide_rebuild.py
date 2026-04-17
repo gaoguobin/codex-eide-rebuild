@@ -858,6 +858,7 @@ class ExecutorTests(unittest.TestCase):
                 dll_path.resolve().as_posix(),
                 "-p",
                 "D:/repo/build/Debug/builder.params",
+                "--rebuild",
             ],
         )
 
@@ -920,7 +921,7 @@ targets:
                     "           FLASH:      139076 B       180 KB     75.45%\n"
                 ),
                 stderr="",
-                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params"],
+                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params", "--rebuild"],
                 cwd=project_dir.as_posix(),
             )
 
@@ -986,7 +987,7 @@ targets:
                 duration_ms=1000,
                 stdout="",
                 stderr="",
-                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params"],
+                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params", "--rebuild"],
                 cwd=project_dir.as_posix(),
             )
 
