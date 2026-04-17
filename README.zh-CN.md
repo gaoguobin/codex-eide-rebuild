@@ -8,12 +8,6 @@
 
 ```text
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
-
-After install, run:
-python "$HOME\\.codex\\codex-eide-rebuild\\skills\\eide-rebuild\\scripts\\eide_rebuild.py" doctor
-
-Report the JSON result.
-When ok=true, tell me to restart Codex.
 ```
 
 安装入口：
@@ -26,7 +20,7 @@ When ok=true, tell me to restart Codex.
 python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
 ```
 
-第一次安装通常会有一次权限批准。安装和 `doctor` 校验都由 Agent 执行。`doctor.ok=true` 之后重启 Codex。
+第一次安装通常会有一次权限批准。Agent 会按 `INSTALL.md` 完成安装、运行 `doctor`、回报 JSON 结果。`doctor.ok=true` 之后重启 Codex。
 
 ## 升级
 
@@ -34,7 +28,7 @@ python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path s
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md
 ```
 
-升级会更新本地 repo，并强制重装 bridge VSIX。升级后重启 Codex。
+升级会更新本地 repo，并刷新 direct-builder 运行时。升级后重启 Codex。
 
 ## 卸载
 
@@ -42,7 +36,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md
 ```
 
-卸载会移除 skill、本地 repo、bridge 扩展和相关本地状态。卸载后重启 Codex。
+卸载会移除 skill、本地 repo，并清理旧版 bridge 安装留下的本地状态。卸载后重启 Codex。
 
 ## 自然语言入口
 
@@ -61,17 +55,15 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 ## 行为
 
 - 解析 `.code-workspace` 或只包含一个工作区文件的工程目录
-- 复用已打开的目标 VS Code 工作区
-- 在缺少活跃桥接时自动打开工作区
-- 自动安装仓库内置 VSIX 到默认 VS Code profile
-- 调用 `eide.project.rebuild`
-- 通过 EIDE 构建产物判定完成
-- 输出纯文本协议和完整 `compiler.log`
+- 读取当前工程的 `.eide/eide.yml` 和相关配置
+- 现场生成 `builder.params`
+- 自动发现 EIDE 扩展、工具目录、工具链和 `dotnet`
+- 调用 `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
+- 把完整结果以单个 JSON 输出给 Agent
 
 ## 开发
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\runtime\bridge\build-vsix.ps1
 python .\scripts\sync_skill_runtime.py --copy
 python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"

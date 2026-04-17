@@ -8,12 +8,6 @@ Paste this into Codex:
 
 ```text
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
-
-After install, run:
-python "$HOME\\.codex\\codex-eide-rebuild\\skills\\eide-rebuild\\scripts\\eide_rebuild.py" doctor
-
-Report the JSON result.
-When ok=true, tell me to restart Codex.
 ```
 
 ## What this installs
@@ -57,17 +51,14 @@ cmd /d /c "mklink /J `"$skillNamespace`" `"$repoRoot\skills`""
 
 ## After install
 
-The engineer flow ends after pasting the prompt above.
-Codex handles install and runs `doctor`.
-Restart Codex after Codex reports `doctor.ok=true` so it rescans `~/.agents/skills`.
-
-Run this environment check once:
+Run this environment check in the same Codex turn:
 
 ```powershell
 python "$repoRoot\skills\eide-rebuild\scripts\eide_rebuild.py" doctor
 ```
 
-Expected: one JSON object with `"ok": true`
+Report the JSON result in the reply.
+When the JSON contains `"ok": true`, tell the user to restart Codex so it rescans `~/.agents/skills`.
 
 Then use natural language or an explicit path:
 

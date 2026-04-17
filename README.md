@@ -8,12 +8,6 @@ One-paste prompt for engineers:
 
 ```text
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
-
-After install, run:
-python "$HOME\\.codex\\codex-eide-rebuild\\skills\\eide-rebuild\\scripts\\eide_rebuild.py" doctor
-
-Report the JSON result.
-When ok=true, tell me to restart Codex.
 ```
 
 Primary Codex install flow:
@@ -26,7 +20,7 @@ Fallback GitHub installer:
 python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
 ```
 
-The first install usually needs one approval to clone the repository and create the skill junction. The agent handles install plus `doctor`. Restart Codex after `doctor.ok=true`.
+The first install usually needs one approval to clone the repository and create the skill junction. The agent follows `INSTALL.md`, runs `doctor`, and reports the JSON result. Restart Codex after `doctor.ok=true`.
 
 ## Update
 
@@ -34,11 +28,11 @@ Update an existing install with:
 
 `Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md`
 
-This flow fast-forwards the local repo and force-reinstalls the bundled bridge VSIX. Restart Codex after update.
+This flow fast-forwards the local repo and refreshes the bundled direct-builder runtime. Restart Codex after update.
 
 ## Uninstall
 
-Remove the skill, the local repo, the bridge extension, and the related bridge state with:
+Remove the skill, the local repo, and legacy bridge leftovers from older installs with:
 
 `Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md`
 
@@ -61,25 +55,25 @@ Explicit command-style prompts also work:
 ## What it does
 
 - Resolves a `.code-workspace` file or a project directory with exactly one workspace file
-- Reuses an open VS Code window for the target workspace
-- Opens the workspace when no live bridge registration exists
-- Installs the bundled bridge VSIX into the default VS Code profile
-- Triggers `eide.project.rebuild`
-- Waits for completion using EIDE build artifacts
-- Prints a plain-text protocol plus the full `compiler.log`
+- Reads the current `.eide/eide.yml` project model and related config files
+- Generates `builder.params` on demand
+- Auto-discovers the EIDE extension, tools, toolchain, and `dotnet`
+- Runs `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
+- Returns one complete JSON result to the agent
 
 ## Output protocol
 
-```text
-[EIDE-CLI] begin workspace=C:\work\demo\project.code-workspace
-[EIDE-CLI] target=Debug
-[EIDE-CLI] logPath=C:\work\demo\build\Debug\compiler.log
-[EIDE-CLI] result=success
-[EIDE-CLI] durationMs=1234
-[EIDE-CLI] compiler-log-begin
-...full compiler.log text...
-[EIDE-CLI] compiler-log-end
-[EIDE-CLI] end exitCode=0
+```json
+{
+  "ok": true,
+  "errorCode": "OK",
+  "targets": [
+    {
+      "name": "Debug",
+      "ok": true
+    }
+  ]
+}
 ```
 
 ## Repository layout
@@ -87,7 +81,6 @@ Explicit command-style prompts also work:
 ```text
 .codex/             Codex-facing install, update, and uninstall guides
 runtime/
-  bridge/          VS Code bridge extension source and VSIX pack script
   python/          Shared Python runner
   tests/           Unit tests and repository audits
 skills/
@@ -100,10 +93,9 @@ scripts/
 
 ## Development
 
-Build the bridge VSIX and sync it into the skill bundle:
+Sync the runtime and run tests:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\runtime\bridge\build-vsix.ps1
 python .\scripts\sync_skill_runtime.py --copy
 python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"
