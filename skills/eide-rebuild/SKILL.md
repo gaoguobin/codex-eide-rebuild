@@ -1,6 +1,6 @@
 ---
 name: eide-rebuild
-description: Rebuilds an Embedded IDE for VS Code workspace through a Python runner and returns the full compiler.log as plain text. Use when the user asks to compile, rebuild, verify a build, or says phrases like "你自己编译验证下对不对", "帮我编译确认一下", "先 rebuild 看结果", or "用 EIDE 编一下".
+description: Rebuilds an Embedded IDE for VS Code workspace through a Python runner and returns one complete JSON result. Use when the user asks to compile, rebuild, verify a build, or says phrases like "你自己编译验证下对不对", "帮我编译确认一下", "先 rebuild 看结果", or "用 EIDE 编一下".
 ---
 
 Use this skill when the user wants an EIDE project rebuilt from Codex.
@@ -25,12 +25,18 @@ Run:
 python scripts/eide_rebuild.py rebuild <workspace-or-project-path>
 ```
 
+Environment check:
+
+```powershell
+python scripts/eide_rebuild.py doctor
+```
+
 ## Result handling
 
 - Treat the runner as the source of truth.
-- Read the `[EIDE-CLI]` protocol lines from `stdout`.
-- Keep the full `compiler.log` content intact.
-- Use exit code `0` for success, `6` for build failure, and the other exit codes for environment or bridge errors.
+- Read one complete JSON object from `stdout`.
+- Keep `compilerLog`, `steps`, `artifacts`, and `transcript` intact.
+- Use exit code `0` for success, `6` for build failure, and the other exit codes for environment or tool errors.
 
 ## Subagent guidance
 

@@ -1,6 +1,6 @@
 # codex-eide-rebuild
 
-`codex-eide-rebuild` provides a GitHub-installable Codex skill, a Windows Python runner, and a minimal VS Code bridge extension for rebuilding Embedded IDE for VS Code projects and returning the complete `compiler.log` as plain text.
+`codex-eide-rebuild` provides a GitHub-installable Codex skill and a Windows Python runner for rebuilding Embedded IDE for VS Code projects and returning one complete JSON result.
 
 ## Install
 

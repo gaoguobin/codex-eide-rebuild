@@ -45,6 +45,14 @@ cmd /d /c "mklink /J `"$skillNamespace`" `"$repoRoot\skills`""
 
 Restart Codex so it rescans `~/.agents/skills`.
 
+Run this environment check once:
+
+```powershell
+python "$repoRoot\skills\eide-rebuild\scripts\eide_rebuild.py" doctor
+```
+
+Expected: one JSON object with `"ok": true`
+
 Then use natural language or an explicit path:
 
 - `你自己编译验证下对不对`

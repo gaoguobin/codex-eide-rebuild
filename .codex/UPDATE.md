@@ -1,10 +1,6 @@
 # codex-eide-rebuild update for Codex
 
-Use these instructions on Windows to update an existing local install and immediately refresh the VS Code bridge extension.
-
-## Before updating
-
-Close VS Code windows that are actively using the EIDE rebuild bridge. The bridge VSIX reinstall is most reliable after those windows are closed.
+Use these instructions on Windows to update an existing local install and refresh the direct-builder runtime.
 
 ## Update steps
 
@@ -31,27 +27,12 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'git is required before updating codex-eide-rebuild.'
 }
 
-if (-not (Get-Command code -ErrorAction SilentlyContinue)) {
-    throw 'VS Code CLI command `code` is required before updating codex-eide-rebuild.'
-}
-
 git -C $repoRoot fetch --tags origin
 git -C $repoRoot switch main
 git -C $repoRoot pull --ff-only
-
-$vsixPath = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'runtime\bridge\dist') -Filter 'eide-rebuild.cli-bridge-*.vsix' |
-    Sort-Object Name -Descending |
-    Select-Object -First 1 -ExpandProperty FullName
-
-if (-not $vsixPath) {
-    throw 'Bundled bridge VSIX is missing after update.'
-}
-
-code --install-extension $vsixPath --force
+python "$repoRoot\skills\eide-rebuild\scripts\eide_rebuild.py" doctor
 ```
 
 ## After update
 
 Restart Codex so it rescans the skill namespace and picks up the updated docs.
-
-The next `rebuild` run will use the refreshed bridge extension and the updated runner.
