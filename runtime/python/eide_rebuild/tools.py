@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .eide_model import require_yaml_module
 from .platform import current_platform, normalize_path
 
 
@@ -272,10 +273,34 @@ def check_unify_builder_runtime(dotnet_path: str, unify_builder_path: str) -> di
     }
 
 
+def check_pyyaml_dependency() -> dict[str, object]:
+    try:
+        yaml_module = require_yaml_module()
+    except RuntimeError as error:
+        return {
+            "ok": False,
+            "package": "PyYAML",
+            "module": "yaml",
+            "version": "",
+            "message": str(error),
+        }
+
+    return {
+        "ok": True,
+        "package": "PyYAML",
+        "module": "yaml",
+        "version": str(getattr(yaml_module, "__version__", "") or ""),
+        "message": "",
+    }
+
+
 def run_doctor() -> dict[str, object]:
     tools: dict[str, str] = {}
     errors: list[str] = []
     runtime_info: dict[str, object] = {"ok": True}
+    dependencies = {
+        "pyyaml": check_pyyaml_dependency(),
+    }
 
     checks = {
         "dotnet": find_dotnet,
@@ -297,6 +322,10 @@ def run_doctor() -> dict[str, object]:
         if not runtime_info.get("ok", False):
             errors.append(str(runtime_info.get("message") or "Unify builder runtime check failed."))
 
+    for dependency_info in dependencies.values():
+        if not dependency_info.get("ok", False):
+            errors.append(str(dependency_info.get("message") or "Python dependency check failed."))
+
     ok = not errors
     return {
         "ok": ok,
@@ -305,5 +334,6 @@ def run_doctor() -> dict[str, object]:
         "message": "" if ok else "; ".join(errors),
         "platform": current_platform(),
         "tools": tools,
+        "dependencies": dependencies,
         "runtime": runtime_info,
     }

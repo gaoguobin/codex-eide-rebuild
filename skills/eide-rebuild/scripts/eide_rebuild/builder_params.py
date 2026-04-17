@@ -6,9 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from .eide_model import load_eide_model
+from .eide_model import load_eide_model, require_yaml_module
 
 
 SOURCE_EXTS = {".c", ".cpp", ".cc", ".cxx", ".s", ".a", ".o", ".lib", ".obj"}
@@ -128,8 +126,9 @@ def _load_source_params(eide_dir: Path, target: str) -> dict[str, Any]:
     files_options_path = eide_dir / "files.options.yml"
     if not files_options_path.exists():
         return {}
+    yaml_module = require_yaml_module()
     with files_options_path.open("r", encoding="utf-8") as stream:
-        files_opts = yaml.safe_load(stream) or {}
+        files_opts = yaml_module.safe_load(stream) or {}
     source_params = (((files_opts.get("options") or {}).get(target) or {}).get("files") or {})
     if isinstance(source_params, dict):
         return source_params

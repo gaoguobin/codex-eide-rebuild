@@ -704,6 +704,10 @@ class ToolDiscoveryTests(unittest.TestCase):
 class DoctorTests(unittest.TestCase):
     def test_doctor_reports_discovered_tools(self) -> None:
         with (
+            mock.patch(
+                "eide_rebuild.tools.check_pyyaml_dependency",
+                return_value={"ok": True, "package": "PyYAML", "module": "yaml", "version": "6.0.2", "message": ""},
+            ),
             mock.patch("eide_rebuild.tools.find_dotnet", return_value="C:/dotnet/dotnet.exe"),
             mock.patch("eide_rebuild.tools.find_eide_extension_dir", return_value="C:/EIDE/extension"),
             mock.patch("eide_rebuild.tools.find_eide_tools_dir", return_value="C:/EIDE/models"),
@@ -720,10 +724,15 @@ class DoctorTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["tools"]["dotnet"], "C:/dotnet/dotnet.exe")
         self.assertEqual(result["tools"]["eideUtilsDir"], "C:/EIDE/utils")
+        self.assertEqual(result["dependencies"]["pyyaml"]["version"], "6.0.2")
         self.assertEqual(result["runtime"]["requiredVersion"], "6.0.0")
 
     def test_doctor_reports_missing_unify_builder_runtime(self) -> None:
         with (
+            mock.patch(
+                "eide_rebuild.tools.check_pyyaml_dependency",
+                return_value={"ok": True, "package": "PyYAML", "module": "yaml", "version": "6.0.2", "message": ""},
+            ),
             mock.patch("eide_rebuild.tools.find_dotnet", return_value="C:/dotnet/dotnet.exe"),
             mock.patch("eide_rebuild.tools.find_eide_extension_dir", return_value="C:/EIDE/extension"),
             mock.patch("eide_rebuild.tools.find_eide_tools_dir", return_value="C:/EIDE/models"),
@@ -746,6 +755,35 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["exitCode"], 3)
         self.assertEqual(result["errorCode"], "TOOL_NOT_FOUND")
         self.assertIn("6.0", result["message"])
+
+    def test_doctor_reports_missing_pyyaml_dependency(self) -> None:
+        with (
+            mock.patch(
+                "eide_rebuild.tools.check_pyyaml_dependency",
+                return_value={
+                    "ok": False,
+                    "package": "PyYAML",
+                    "module": "yaml",
+                    "version": "",
+                    "message": "PyYAML is required. Run `python -m pip install --user PyYAML`.",
+                },
+            ),
+            mock.patch("eide_rebuild.tools.find_dotnet", return_value="C:/dotnet/dotnet.exe"),
+            mock.patch("eide_rebuild.tools.find_eide_extension_dir", return_value="C:/EIDE/extension"),
+            mock.patch("eide_rebuild.tools.find_eide_tools_dir", return_value="C:/EIDE/models"),
+            mock.patch("eide_rebuild.tools.find_unify_builder", return_value="C:/EIDE/unify_builder.exe"),
+            mock.patch("eide_rebuild.tools.find_toolchain_root", return_value="C:/gcc-arm"),
+            mock.patch("eide_rebuild.tools.find_eide_utils_dir", return_value="C:/EIDE/utils"),
+            mock.patch(
+                "eide_rebuild.tools.check_unify_builder_runtime",
+                return_value={"ok": True, "requiredFramework": "Microsoft.NETCore.App", "requiredVersion": "6.0.0"},
+            ),
+        ):
+            result = eide_rebuild.run_doctor()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["exitCode"], 3)
+        self.assertIn("PyYAML", result["message"])
 
     def test_main_supports_doctor_command(self) -> None:
         stdout_buffer = io.StringIO()

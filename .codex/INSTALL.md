@@ -32,6 +32,10 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'git is required before installing codex-eide-rebuild.'
 }
 
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    throw 'python is required before installing codex-eide-rebuild.'
+}
+
 if (-not (Get-Command code -ErrorAction SilentlyContinue)) {
     throw 'VS Code CLI command `code` is required before installing codex-eide-rebuild.'
 }
@@ -46,6 +50,7 @@ if (Test-Path $skillNamespace) {
 
 New-Item -ItemType Directory -Force -Path $skillsRoot | Out-Null
 git clone https://github.com/gaoguobin/codex-eide-rebuild.git $repoRoot
+python -m pip install --user PyYAML
 cmd /d /c "mklink /J `"$skillNamespace`" `"$repoRoot\skills`""
 ```
 

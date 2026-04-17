@@ -27,9 +27,14 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'git is required before updating codex-eide-rebuild.'
 }
 
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    throw 'python is required before updating codex-eide-rebuild.'
+}
+
 git -C $repoRoot fetch --tags origin
 git -C $repoRoot switch main
 git -C $repoRoot pull --ff-only
+python -m pip install --user PyYAML
 python "$repoRoot\skills\eide-rebuild\scripts\eide_rebuild.py" doctor
 ```
 
