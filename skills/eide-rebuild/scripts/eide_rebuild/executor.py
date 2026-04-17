@@ -64,6 +64,7 @@ def build_unify_builder_command(dotnet_path: str, unify_builder_path: str, build
         unify_builder_dll,
         "-p",
         builder_params_path,
+        "--rebuild",
     ]
 
 
