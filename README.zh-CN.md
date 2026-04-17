@@ -1,6 +1,6 @@
 # codex-eide-rebuild
 
-`codex-eide-rebuild` 提供三部分能力：GitHub 可安装的 Codex skill、Windows Python runner、极小的 VS Code 桥接扩展。它会触发 EIDE 的 `rebuild`，并把完整 `compiler.log` 以纯文本协议返回给 Agent。
+`codex-eide-rebuild` 提供两部分能力：GitHub 可安装的 Codex skill、Windows Python runner。它会直接触发 EIDE 的构建链路，并把完整结果以单个 JSON 返回给 Agent。
 
 ## 安装
 
