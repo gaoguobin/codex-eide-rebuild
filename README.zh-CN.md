@@ -4,7 +4,19 @@
 
 ## 安装
 
-主入口：
+给工程师的一句话：
+
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
+
+After install, run:
+python "$HOME\\.codex\\codex-eide-rebuild\\skills\\eide-rebuild\\scripts\\eide_rebuild.py" doctor
+
+Report the JSON result.
+When ok=true, tell me to restart Codex.
+```
+
+安装入口：
 
 `Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md`
 
@@ -14,7 +26,7 @@
 python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
 ```
 
-第一次安装通常会有一次权限批准。安装后重启 Codex。
+第一次安装通常会有一次权限批准。安装和 `doctor` 校验都由 Agent 执行。`doctor.ok=true` 之后重启 Codex。
 
 ## 升级
 

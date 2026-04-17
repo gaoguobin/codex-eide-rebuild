@@ -2,6 +2,20 @@
 
 Use these instructions on Windows to install the repository in the same style as `obra/superpowers`.
 
+## One-paste prompt for engineers
+
+Paste this into Codex:
+
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
+
+After install, run:
+python "$HOME\\.codex\\codex-eide-rebuild\\skills\\eide-rebuild\\scripts\\eide_rebuild.py" doctor
+
+Report the JSON result.
+When ok=true, tell me to restart Codex.
+```
+
 ## What this installs
 
 - Git repo: `%USERPROFILE%\.codex\codex-eide-rebuild`
@@ -43,7 +57,9 @@ cmd /d /c "mklink /J `"$skillNamespace`" `"$repoRoot\skills`""
 
 ## After install
 
-Restart Codex so it rescans `~/.agents/skills`.
+The engineer flow ends after pasting the prompt above.
+Codex handles install and runs `doctor`.
+Restart Codex after Codex reports `doctor.ok=true` so it rescans `~/.agents/skills`.
 
 Run this environment check once:
 

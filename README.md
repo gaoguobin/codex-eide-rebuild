@@ -4,6 +4,18 @@
 
 ## Install
 
+One-paste prompt for engineers:
+
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
+
+After install, run:
+python "$HOME\\.codex\\codex-eide-rebuild\\skills\\eide-rebuild\\scripts\\eide_rebuild.py" doctor
+
+Report the JSON result.
+When ok=true, tell me to restart Codex.
+```
+
 Primary Codex install flow:
 
 `Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md`
@@ -14,7 +26,7 @@ Fallback GitHub installer:
 python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
 ```
 
-The first install usually needs one approval to clone the repository and create the skill junction. Restart Codex after install.
+The first install usually needs one approval to clone the repository and create the skill junction. The agent handles install plus `doctor`. Restart Codex after `doctor.ok=true`.
 
 ## Update
 
