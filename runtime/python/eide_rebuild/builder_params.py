@@ -159,12 +159,13 @@ def generate_builder_params(project_root: Path, target: str, eide_tools_dir: str
     )
 
     dump_path = f"build/{target}"
+    eide_tools_root = str(eide_tools_dir).rstrip("/\\")
     return {
         "name": model.project_name,
         "target": target,
         "toolchain": toolchain,
         "toolchainLocation": _to_posix(toolchain_root),
-        "toolchainCfgFile": _to_posix(f"{eide_tools_dir.rstrip('/').rstrip('\\\\')}/arm.gcc.model.json"),
+        "toolchainCfgFile": _to_posix(f"{eide_tools_root}/arm.gcc.model.json"),
         "buildMode": "fast|multhread",
         "showRepathOnLog": True,
         "threadNum": os.cpu_count() or 4,
