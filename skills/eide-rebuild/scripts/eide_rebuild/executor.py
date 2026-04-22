@@ -110,8 +110,15 @@ def _read_text_file(path_value: Path) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def collect_output_files(project_root: Path, target_name: str) -> list[dict[str, object]]:
-    build_dir = project_root / "build" / target_name
+def _resolve_build_dir(project_root: Path, dump_path: str) -> Path:
+    path_obj = Path(dump_path)
+    if path_obj.is_absolute():
+        return path_obj.resolve()
+    return (project_root / path_obj).resolve()
+
+
+def collect_output_files(project_root: Path, target_name: str, dump_path: str | None = None) -> list[dict[str, object]]:
+    build_dir = _resolve_build_dir(project_root, dump_path or f"build/{target_name}")
     if not build_dir.exists():
         return []
 
@@ -253,10 +260,11 @@ def rebuild_target(
     started_at = utc_now()
     steps: list[StepResult] = []
     compiler_log = ""
-    compiler_log_path = project_root / "build" / target_name / "compiler.log"
-    builder_params_path = project_root / "build" / target_name / "builder.params"
-    stack_report_json_path = project_root / "build" / target_name / "stack_report.json"
-    stack_report_html_path = project_root / "build" / target_name / "stack_report.html"
+    build_dir = _resolve_build_dir(project_root, f"build/{target_name}")
+    compiler_log_path = build_dir / "compiler.log"
+    builder_params_path = build_dir / "builder.params"
+    stack_report_json_path = build_dir / "stack_report.json"
+    stack_report_html_path = build_dir / "stack_report.html"
     builder_params_summary: dict[str, object] = {}
     memory: list[dict[str, object]] = []
     source_stats: dict[str, int] = {}
@@ -268,12 +276,17 @@ def rebuild_target(
         step_started_mark = time.perf_counter()
         step_started_at = utc_now()
         params = generate_builder_params(project_root, target_name, eide_tools_dir, toolchain_root)
+        build_dir = _resolve_build_dir(project_root, str(params.get("dumpPath") or f"build/{target_name}"))
+        compiler_log_path = build_dir / "compiler.log"
+        stack_report_json_path = build_dir / "stack_report.json"
+        stack_report_html_path = build_dir / "stack_report.html"
         builder_params_path = write_builder_params(project_root, target_name, params)
         step_finished_at = utc_now()
         builder_params_summary = {
             "toolchain": params.get("toolchain", ""),
             "threadNum": params.get("threadNum", 0),
             "sourceCount": len(list(params.get("sourceList") or [])),
+            "dumpPath": params.get("dumpPath", ""),
         }
         hook_env = {str(key): str(value) for key, value in dict(params.get("env") or {}).items()}
         process_env = build_process_env(hook_env, toolchain_root)
@@ -333,7 +346,7 @@ def rebuild_target(
             exit_code = 4
 
     finished_at = utc_now()
-    artifacts = collect_output_files(project_root, target_name)
+    artifacts = collect_output_files(project_root, target_name, builder_params_summary.get("dumpPath") or None)
     transcript = _build_transcript(steps)
     return TargetResult(
         name=target_name,

@@ -486,6 +486,104 @@ targets:
 
             self.assertEqual(params["toolchainCfgFile"], "C:/EIDE/arm.gcc.model.json")
 
+    def test_generate_builder_params_uses_project_out_dir_metadata_and_env_ini(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            eide_dir = project_dir / ".eide"
+            eide_dir.mkdir()
+            (project_dir / "linker.ld").write_text("MEMORY {}\n", encoding="utf-8")
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+type: ARM
+deviceName: GD32F503RCT6
+packDir: Packs/GigaDevice
+outDir: artifacts
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M33
+        floatingPointHardware: none
+        archExtensions: ""
+        scatterFilePath: linker.ld
+        options:
+          global: {}
+          linker:
+            output-format: elf
+''',
+                encoding="utf-8",
+            )
+            (eide_dir / "env.ini").write_text(
+                '''
+GLOBAL_VAR=global
+
+[debug]
+TARGET_VAR=debug
+''',
+                encoding="utf-8",
+            )
+
+            params = eide_rebuild.generate_builder_params(project_dir, "Debug", "C:/EIDE", "C:/gcc-arm")
+
+            self.assertEqual(params["dumpPath"], "artifacts/Debug")
+            self.assertEqual(params["outDir"], "artifacts/Debug")
+            self.assertEqual(params["env"]["OutDir"], f"{project_dir.as_posix()}/artifacts/Debug")
+            self.assertEqual(params["env"]["OutDirRoot"], "artifacts")
+            self.assertEqual(params["env"]["OutDirBase"], "artifacts/Debug")
+            self.assertEqual(params["env"]["ExecutableName"], f"{project_dir.as_posix()}/artifacts/Debug/demo")
+            self.assertEqual(params["env"]["ChipPackDir"], "Packs/GigaDevice")
+            self.assertEqual(params["env"]["ChipName"], "GD32F503RCT6")
+            self.assertEqual(params["env"]["GLOBAL_VAR"], "global")
+            self.assertEqual(params["env"]["TARGET_VAR"], "debug")
+
+            output_path = eide_rebuild.write_builder_params(project_dir, "Debug", params)
+
+            self.assertEqual(output_path, project_dir / "artifacts" / "Debug" / "builder.params")
+
+    def test_generate_builder_params_resolves_toolchain_model_and_prefix_from_project_type(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            eide_dir = project_dir / ".eide"
+            eide_tools_dir = project_dir / "models"
+            eide_dir.mkdir()
+            eide_tools_dir.mkdir()
+            (eide_tools_dir / "riscv.gcc.model.json").write_text(
+                '{"toolPrefix": "riscv-none-elf-"}\n',
+                encoding="utf-8",
+            )
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+type: RISCV
+outDir: build
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: rv32imac
+        floatingPointHardware: none
+        archExtensions: ""
+        scatterFilePath: ""
+        options:
+          global: {}
+          linker:
+            output-format: elf
+''',
+                encoding="utf-8",
+            )
+
+            params = eide_rebuild.generate_builder_params(project_dir, "Debug", str(eide_tools_dir), "C:/riscv-gcc")
+
+            self.assertEqual(params["toolchainCfgFile"], (eide_tools_dir / "riscv.gcc.model.json").as_posix())
+            self.assertEqual(params["options"]["global"]["toolPrefix"], "riscv-none-elf-")
+
 
 class JsonProtocolTests(unittest.TestCase):
     def test_main_emits_single_json_object(self) -> None:
@@ -950,6 +1048,71 @@ targets:
             self.assertEqual(target.memory[1]["name"], "FLASH")
             self.assertEqual(target.steps[0].kind, "generate-builder-params")
             self.assertEqual(target.steps[1].kind, "unify-builder")
+
+    def test_rebuild_target_uses_generated_dump_path_for_logs_and_artifacts(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            build_dir = project_dir / "artifacts" / "Debug"
+            build_dir.mkdir(parents=True)
+            builder_params_path = build_dir / "builder.params"
+            builder_params_path.write_text("{}", encoding="utf-8")
+            (build_dir / "compiler.log").write_text("[ DONE ] build successfully !\n", encoding="utf-8")
+            (build_dir / "app.bin").write_bytes(b"abc")
+            (build_dir / "stack_report.json").write_text('{"pct_guard": 67.19}', encoding="utf-8")
+            (build_dir / "stack_report.html").write_text("<html></html>", encoding="utf-8")
+            params = {
+                "toolchain": "GCC",
+                "threadNum": 8,
+                "sourceList": ["main.c"],
+                "dumpPath": "artifacts/Debug",
+                "env": {
+                    "ProjectName": "demo",
+                    "ConfigName": "Debug",
+                    "OutDirBase": "artifacts/Debug",
+                },
+                "options": {
+                    "beforeBuildTasks": [],
+                    "afterBuildTasks": [],
+                },
+            }
+            step = eide_rebuild.StepResult(
+                kind="unify-builder",
+                name="build Debug",
+                ok=True,
+                exit_code=0,
+                error_code="OK",
+                message="",
+                started_at="2026-04-16T08:13:04Z",
+                finished_at="2026-04-16T08:13:05Z",
+                duration_ms=1000,
+                stdout="Memory region         Used Size  Region Size  %age Used\n             RAM:       1 B        64 KB     1.00%\n",
+                stderr="",
+                command=["dotnet", "unify_builder.dll", "-p", "artifacts/Debug/builder.params", "--rebuild"],
+                cwd=project_dir.as_posix(),
+            )
+
+            with (
+                mock.patch("eide_rebuild.executor.generate_builder_params", return_value=params),
+                mock.patch("eide_rebuild.executor.write_builder_params", return_value=builder_params_path),
+                mock.patch("eide_rebuild.executor.run_step", return_value=step),
+            ):
+                target = eide_rebuild.rebuild_target(
+                    project_root=project_dir,
+                    project_name="demo",
+                    target_name="Debug",
+                    target_index=1,
+                    target_total=1,
+                    dotnet_path="C:/dotnet/dotnet.exe",
+                    unify_builder_path="C:/EIDE/unify_builder.dll",
+                    eide_tools_dir="C:/EIDE",
+                    toolchain_root="C:/gcc-arm",
+                )
+
+            self.assertEqual(target.builder_params_path, builder_params_path.as_posix())
+            self.assertEqual(target.compiler_log_path, (build_dir / "compiler.log").as_posix())
+            self.assertEqual(target.stack_report_json_path, (build_dir / "stack_report.json").as_posix())
+            self.assertEqual(target.stack_report_html_path, (build_dir / "stack_report.html").as_posix())
+            self.assertEqual(target.artifacts[0]["path"], (build_dir / "app.bin").as_posix())
 
     def test_rebuild_target_marks_missing_compiler_log(self) -> None:
         with make_temp_dir() as temp_dir:
