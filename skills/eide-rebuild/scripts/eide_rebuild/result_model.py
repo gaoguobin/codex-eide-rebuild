@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from .platform import current_platform
+
 
 _KEY_MAP = {
     "schema_version": "schemaVersion",
@@ -108,12 +110,6 @@ def _normalize_path(path_value: Path | str) -> str:
     return str(Path(path_value).resolve()).replace("\\", "/")
 
 
-def _current_platform() -> str:
-    import os
-
-    return "windows" if os.name == "nt" else "linux"
-
-
 def build_run_result(
     workspace_path: str,
     project_root: Path | str,
@@ -157,7 +153,7 @@ def build_error_result(error: Exception, started_at: str, finished_at: str, dura
         error_code=error_code,
         message=str(error),
         mode="rebuild-all",
-        platform=_current_platform(),
+        platform=current_platform(),
         started_at=started_at,
         finished_at=finished_at,
         duration_ms=duration_ms,

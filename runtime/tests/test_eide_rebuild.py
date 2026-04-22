@@ -21,6 +21,7 @@ if str(RUNTIME_PYTHON) not in sys.path:
 
 import eide_rebuild
 from eide_rebuild import builder_params as builder_params_module
+from eide_rebuild import result_model as result_model_module
 
 
 @contextmanager
@@ -697,6 +698,14 @@ class JsonProtocolTests(unittest.TestCase):
             eide_rebuild.write_run_result(output_path, result)
 
             self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")), json.loads(eide_rebuild.render_json_result(result)))
+
+    def test_build_error_result_uses_shared_current_platform(self) -> None:
+        result = eide_rebuild.build_error_result(RuntimeError("boom"), "2026-04-16T08:13:04Z", "2026-04-16T08:13:05Z", 1000)
+
+        self.assertEqual(result.platform, eide_rebuild.current_platform())
+
+    def test_result_model_does_not_define_duplicate_current_platform(self) -> None:
+        self.assertFalse(hasattr(result_model_module, "_current_platform"))
 
 
 class ToolDiscoveryTests(unittest.TestCase):
