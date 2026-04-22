@@ -13,4 +13,4 @@ Run the shared EIDE rebuild runner for the provided path.
 python runtime/python/eide_rebuild.py rebuild $ARGUMENTS
 ```
 
-4. Keep the `[EIDE-CLI]` protocol and complete `compiler.log` intact in the response.
+4. Return the complete JSON result and keep `compilerLog`, `steps`, `artifacts`, and `transcript` intact.

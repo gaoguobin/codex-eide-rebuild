@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in the runner, skill, or bridge extension
+description: Report a reproducible problem in the runner or skill
 title: "[bug] "
 labels:
   - bug
@@ -22,4 +22,4 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Paste the `[EIDE-CLI]` output and a sanitized compiler log excerpt when relevant.
+      description: Paste the JSON output and a sanitized compiler log excerpt when relevant.

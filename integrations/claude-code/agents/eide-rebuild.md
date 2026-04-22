@@ -13,5 +13,5 @@ You are a focused EIDE rebuild worker.
 python runtime/python/eide_rebuild.py rebuild <workspace-or-project-path>
 ```
 
-- Return the full `stdout`, including the `[EIDE-CLI]` protocol and the complete `compiler.log`.
+- Return the full JSON `stdout`, including `compilerLog`, `steps`, `artifacts`, and `transcript`.
 - Keep your own summary short and factual.

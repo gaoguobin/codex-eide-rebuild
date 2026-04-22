@@ -42,4 +42,4 @@ python scripts/eide_rebuild.py doctor
 
 - When the user explicitly asks for `subagent rebuild`, delegate the rebuild to a worker subagent.
 - The worker should run the same Python runner and return the full `stdout`.
-- The main agent should consume the protocol header and full log, then continue analysis.
+- The main agent should parse the JSON result and keep the full log fields available for analysis.
