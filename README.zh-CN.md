@@ -62,6 +62,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 - 调用 `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
 - 把完整结果以单个 JSON 输出给 Agent
 - 编译步骤 60 秒无响应时返回 `STEP_TIMEOUT`
+- `doctor.toolChecks` 会结构化报告环境检查失败原因
 
 ## 开发
 

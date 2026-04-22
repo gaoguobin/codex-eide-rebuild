@@ -40,6 +40,28 @@ def _timeout_payload(value: object) -> str:
     return str(value)
 
 
+def _error_type(error: BaseException) -> str:
+    return type(error).__name__
+
+
+def _tool_check_ok(path_value: str) -> dict[str, object]:
+    return {
+        "ok": True,
+        "path": path_value,
+        "message": "",
+        "errorType": "",
+    }
+
+
+def _tool_check_error(error: BaseException) -> dict[str, object]:
+    return {
+        "ok": False,
+        "path": "",
+        "message": str(error),
+        "errorType": _error_type(error),
+    }
+
+
 def _path_if_dir(path_value: Path) -> str | None:
     return normalize_path(path_value.resolve()) if path_value.is_dir() else None
 
@@ -352,7 +374,20 @@ def check_unify_builder_runtime(dotnet_path: str, unify_builder_path: str) -> di
     framework_name = ""
     framework_version = ""
     if runtime_config.exists():
-        payload = json.loads(runtime_config.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(runtime_config.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            return {
+                "ok": False,
+                "requiredFramework": "",
+                "requiredVersion": "",
+                "installedVersions": [],
+                "message": f"Failed to read runtimeconfig {normalize_path(runtime_config)}: {error}",
+                "errorType": _error_type(error),
+                "stdout": "",
+                "stderr": "",
+                "launchCommand": launch_command,
+            }
         runtime_options = payload.get("runtimeOptions") or {}
         framework = runtime_options.get("framework") or {}
         framework_name = str(framework.get("name") or "")
@@ -435,6 +470,7 @@ def check_pyyaml_dependency() -> dict[str, object]:
 
 def run_doctor() -> dict[str, object]:
     tools: dict[str, str] = {}
+    tool_checks: dict[str, dict[str, object]] = {}
     errors: list[str] = []
     runtime_info: dict[str, object] = {"ok": True}
     dependencies = {
@@ -452,12 +488,22 @@ def run_doctor() -> dict[str, object]:
 
     for name, getter in checks.items():
         try:
-            tools[name] = getter()
-        except FileNotFoundError as error:
+            path_value = getter()
+            tools[name] = path_value
+            tool_checks[name] = _tool_check_ok(path_value)
+        except Exception as error:
+            tool_checks[name] = _tool_check_error(error)
             errors.append(f"{name}: {error}")
 
     if "dotnet" in tools and "unifyBuilder" in tools:
-        runtime_info = check_unify_builder_runtime(tools["dotnet"], tools["unifyBuilder"])
+        try:
+            runtime_info = check_unify_builder_runtime(tools["dotnet"], tools["unifyBuilder"])
+        except Exception as error:
+            runtime_info = {
+                "ok": False,
+                "message": str(error),
+                "errorType": _error_type(error),
+            }
         if not runtime_info.get("ok", False):
             errors.append(str(runtime_info.get("message") or "Unify builder runtime check failed."))
 
@@ -473,6 +519,7 @@ def run_doctor() -> dict[str, object]:
         "message": "" if ok else "; ".join(errors),
         "platform": current_platform(),
         "tools": tools,
+        "toolChecks": tool_checks,
         "dependencies": dependencies,
         "runtime": runtime_info,
     }

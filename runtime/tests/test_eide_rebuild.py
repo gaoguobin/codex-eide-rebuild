@@ -900,6 +900,8 @@ class DoctorTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["tools"]["dotnet"], "C:/dotnet/dotnet.exe")
         self.assertEqual(result["tools"]["eideUtilsDir"], "C:/EIDE/utils")
+        self.assertTrue(result["toolChecks"]["dotnet"]["ok"])
+        self.assertEqual(result["toolChecks"]["dotnet"]["path"], "C:/dotnet/dotnet.exe")
         self.assertEqual(result["dependencies"]["pyyaml"]["version"], "6.0.2")
         self.assertEqual(result["runtime"]["requiredVersion"], "6.0.0")
 
@@ -932,6 +934,48 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["errorCode"], "TOOL_NOT_FOUND")
         self.assertIn("6.0", result["message"])
 
+    def test_doctor_reports_tool_probe_permission_error(self) -> None:
+        with (
+            mock.patch(
+                "eide_rebuild.tools.check_pyyaml_dependency",
+                return_value={"ok": True, "package": "PyYAML", "module": "yaml", "version": "6.0.2", "message": ""},
+            ),
+            mock.patch("eide_rebuild.tools.find_dotnet", side_effect=PermissionError("access denied")),
+            mock.patch("eide_rebuild.tools.find_eide_extension_dir", return_value="C:/EIDE/extension"),
+            mock.patch("eide_rebuild.tools.find_eide_tools_dir", return_value="C:/EIDE/models"),
+            mock.patch("eide_rebuild.tools.find_unify_builder", return_value="C:/EIDE/unify_builder.exe"),
+            mock.patch("eide_rebuild.tools.find_toolchain_root", return_value="C:/gcc-arm"),
+            mock.patch("eide_rebuild.tools.find_eide_utils_dir", return_value="C:/EIDE/utils"),
+        ):
+            result = eide_rebuild.run_doctor()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["exitCode"], 3)
+        self.assertEqual(result["toolChecks"]["dotnet"]["errorType"], "PermissionError")
+        self.assertIn("access denied", result["toolChecks"]["dotnet"]["message"])
+        self.assertNotIn("dotnet", result["tools"])
+
+    def test_doctor_reports_runtime_probe_exception(self) -> None:
+        with (
+            mock.patch(
+                "eide_rebuild.tools.check_pyyaml_dependency",
+                return_value={"ok": True, "package": "PyYAML", "module": "yaml", "version": "6.0.2", "message": ""},
+            ),
+            mock.patch("eide_rebuild.tools.find_dotnet", return_value="C:/dotnet/dotnet.exe"),
+            mock.patch("eide_rebuild.tools.find_eide_extension_dir", return_value="C:/EIDE/extension"),
+            mock.patch("eide_rebuild.tools.find_eide_tools_dir", return_value="C:/EIDE/models"),
+            mock.patch("eide_rebuild.tools.find_unify_builder", return_value="C:/EIDE/unify_builder.exe"),
+            mock.patch("eide_rebuild.tools.find_toolchain_root", return_value="C:/gcc-arm"),
+            mock.patch("eide_rebuild.tools.find_eide_utils_dir", return_value="C:/EIDE/utils"),
+            mock.patch("eide_rebuild.tools.check_unify_builder_runtime", side_effect=ValueError("bad runtime config")),
+        ):
+            result = eide_rebuild.run_doctor()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["runtime"]["ok"], False)
+        self.assertEqual(result["runtime"]["errorType"], "ValueError")
+        self.assertIn("bad runtime config", result["runtime"]["message"])
+
     def test_unify_builder_runtime_check_reports_timeout(self) -> None:
         with make_temp_dir() as temp_dir:
             unify_builder = Path(temp_dir) / "unify_builder.dll"
@@ -954,6 +998,19 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["stdout"], "partial stdout")
         self.assertEqual(result["stderr"], "partial stderr")
         self.assertEqual(run_mock.call_args.kwargs["timeout"], 30)
+
+    def test_unify_builder_runtime_check_reports_bad_runtimeconfig_json(self) -> None:
+        with make_temp_dir() as temp_dir:
+            unify_builder = Path(temp_dir) / "unify_builder.dll"
+            runtime_config = Path(temp_dir) / "unify_builder.runtimeconfig.json"
+            unify_builder.write_text("dll", encoding="utf-8")
+            runtime_config.write_text("{bad json", encoding="utf-8")
+
+            result = eide_rebuild.check_unify_builder_runtime("C:/dotnet/dotnet.exe", unify_builder.as_posix())
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["errorType"], "JSONDecodeError")
+        self.assertIn("runtimeconfig", result["message"])
 
     def test_doctor_reports_missing_pyyaml_dependency(self) -> None:
         with (

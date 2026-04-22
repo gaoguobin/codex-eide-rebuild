@@ -62,6 +62,7 @@ Explicit command-style prompts also work:
 - Runs `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
 - Returns one complete JSON result to the agent
 - Fails hung build steps with `STEP_TIMEOUT` after 60 seconds
+- Reports structured `doctor.toolChecks` diagnostics for setup failures
 
 ## Output protocol
 
