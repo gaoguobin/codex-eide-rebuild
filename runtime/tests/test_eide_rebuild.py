@@ -782,6 +782,84 @@ class ToolDiscoveryTests(unittest.TestCase):
             ):
                 self.assertEqual(eide_rebuild.find_toolchain_root(), new_root.parent.resolve().as_posix())
 
+    def test_prefers_workspace_configured_gcc_over_latest_candidate(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir) / "project"
+            tools_root = Path(temp_dir) / "tools"
+            old_root = tools_root / "xpack-arm-none-eabi-gcc-14.2.1-1.1" / "bin"
+            new_root = tools_root / "xpack-arm-none-eabi-gcc-15.2.1-1.1" / "bin"
+            project_dir.mkdir(parents=True)
+            old_root.mkdir(parents=True)
+            new_root.mkdir(parents=True)
+            (old_root / "arm-none-eabi-gcc.exe").write_text("gcc", encoding="utf-8")
+            (new_root / "arm-none-eabi-gcc.exe").write_text("gcc", encoding="utf-8")
+            workspace_path = project_dir / "demo.code-workspace"
+            workspace_path.write_text(
+                json.dumps(
+                    {
+                        "folders": [{"path": "."}],
+                        "settings": {
+                            "EIDE.ARM.GCC.InstallDirectory": "${userHome}/.eide/tools/xpack-arm-none-eabi-gcc-14.2.1-1.1"
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"EIDE_REBUILD_TOOLS_ROOT": str(tools_root)}, clear=False):
+                self.assertEqual(
+                    eide_rebuild.find_toolchain_root(workspace_path.resolve().as_posix()),
+                    old_root.parent.resolve().as_posix(),
+                )
+
+    def test_reports_workspace_gcc_mismatch_when_no_candidate_matches(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir) / "project"
+            tools_root = Path(temp_dir) / "tools"
+            only_root = tools_root / "xpack-arm-none-eabi-gcc-14.2.1-1.1" / "bin"
+            project_dir.mkdir(parents=True)
+            only_root.mkdir(parents=True)
+            (only_root / "arm-none-eabi-gcc.exe").write_text("gcc", encoding="utf-8")
+            workspace_path = project_dir / "demo.code-workspace"
+            workspace_path.write_text(
+                json.dumps(
+                    {
+                        "folders": [{"path": "."}],
+                        "settings": {
+                            "EIDE.ARM.GCC.InstallDirectory": "${userHome}/.eide/tools/xpack-arm-none-eabi-gcc-15.2.1-1.1"
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"EIDE_REBUILD_TOOLS_ROOT": str(tools_root)}, clear=False):
+                with self.assertRaises(FileNotFoundError) as error:
+                    eide_rebuild.find_toolchain_root(workspace_path.resolve().as_posix())
+
+            self.assertIn("15.2.1", str(error.exception))
+            self.assertIn("14.2.1", str(error.exception))
+
+    def test_falls_back_to_latest_gcc_when_workspace_has_no_gcc_setting(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir) / "project"
+            tools_root = Path(temp_dir) / "tools"
+            old_root = tools_root / "xpack-arm-none-eabi-gcc-14.2.1-1.1" / "bin"
+            new_root = tools_root / "xpack-arm-none-eabi-gcc-15.2.1-1.1" / "bin"
+            project_dir.mkdir(parents=True)
+            old_root.mkdir(parents=True)
+            new_root.mkdir(parents=True)
+            (old_root / "arm-none-eabi-gcc.exe").write_text("gcc", encoding="utf-8")
+            (new_root / "arm-none-eabi-gcc.exe").write_text("gcc", encoding="utf-8")
+            workspace_path = project_dir / "demo.code-workspace"
+            workspace_path.write_text(json.dumps({"folders": [{"path": "."}], "settings": {}}), encoding="utf-8")
+
+            with mock.patch.dict(os.environ, {"EIDE_REBUILD_TOOLS_ROOT": str(tools_root)}, clear=False):
+                self.assertEqual(
+                    eide_rebuild.find_toolchain_root(workspace_path.resolve().as_posix()),
+                    new_root.parent.resolve().as_posix(),
+                )
+
     def test_build_process_env_prepends_utils_and_toolchain_bin(self) -> None:
         with make_temp_dir() as temp_dir:
             toolchain_root = Path(temp_dir) / "xpack-arm-none-eabi-gcc-15.2.1-1.1"
@@ -1453,6 +1531,69 @@ targets:
             self.assertEqual(payload["targets"][1]["name"], "Release")
             self.assertTrue((project_dir / "build" / "rebuild_result.json").exists())
 
+    def test_main_passes_workspace_path_into_gcc_discovery(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            workspace_path = project_dir / "demo.code-workspace"
+            eide_dir = project_dir / ".eide"
+            eide_dir.mkdir()
+            workspace_path.write_text("{}", encoding="utf-8")
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M33
+        scatterFilePath: linker.ld
+        options: { global: {}, linker: {} }
+''',
+                encoding="utf-8",
+            )
+            target_result = eide_rebuild.TargetResult(
+                name="Debug",
+                index=1,
+                total=1,
+                ok=True,
+                exit_code=0,
+                error_code="OK",
+                message="",
+                builder_params_path=f"{project_dir.as_posix()}/build/Debug/builder.params",
+                compiler_log_path=f"{project_dir.as_posix()}/build/Debug/compiler.log",
+                compiler_log="[ DONE ] build successfully !\n",
+                started_at="2026-04-16T08:13:04Z",
+                finished_at="2026-04-16T08:13:05Z",
+                duration_ms=1000,
+                transcript="[1/1] Building: Debug\n",
+                source_stats={"jobs": 8, "totalFiles": 103},
+                memory=[],
+                artifacts=[],
+                steps=[],
+            )
+            stdout_buffer = io.StringIO()
+
+            with (
+                mock.patch.object(eide_rebuild, "find_dotnet", return_value="C:/dotnet/dotnet.exe"),
+                mock.patch.object(eide_rebuild, "find_unify_builder", return_value="C:/EIDE/unify_builder.dll"),
+                mock.patch.object(eide_rebuild, "find_eide_tools_dir", return_value="C:/EIDE"),
+                mock.patch.object(eide_rebuild, "find_toolchain_root", return_value="C:/gcc-arm") as find_toolchain_root,
+                mock.patch.object(
+                    eide_rebuild,
+                    "check_unify_builder_runtime",
+                    return_value={"ok": True, "requiredFramework": "Microsoft.NETCore.App", "requiredVersion": "6.0.0"},
+                ),
+                mock.patch.object(eide_rebuild, "rebuild_target", return_value=target_result),
+                redirect_stdout(stdout_buffer),
+            ):
+                exit_code = eide_rebuild.main(["rebuild", str(workspace_path)])
+
+            self.assertEqual(exit_code, 0)
+            find_toolchain_root.assert_called_once_with(workspace_path.resolve().as_posix())
+
 class MainFlowTests(unittest.TestCase):
     def test_main_emits_error_json_when_tool_is_missing(self) -> None:
         with make_temp_dir() as temp_dir:
@@ -1472,6 +1613,35 @@ class MainFlowTests(unittest.TestCase):
             self.assertEqual(exit_code, 3)
             self.assertFalse(payload["ok"])
             self.assertEqual(payload["errorCode"], "TOOL_NOT_FOUND")
+
+    def test_main_emits_error_json_when_gcc_version_mismatches_workspace(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            workspace_path = project_dir / "demo.code-workspace"
+            eide_dir = project_dir / ".eide"
+            eide_dir.mkdir()
+            workspace_path.write_text("{}", encoding="utf-8")
+            (eide_dir / "eide.yml").write_text("name: demo\ntargets: {Debug: {}}\n", encoding="utf-8")
+            stdout_buffer = io.StringIO()
+
+            class FakeMismatch(FileNotFoundError):
+                def __init__(self) -> None:
+                    super().__init__("GCC 15.2.1 from workspace was requested; discovered [14.2.1 @ C:/gcc-arm]")
+                    self.error_code = "GCC_VERSION_MISMATCH"
+
+            with (
+                mock.patch.object(eide_rebuild, "find_dotnet", return_value="C:/dotnet/dotnet.exe"),
+                mock.patch.object(eide_rebuild, "find_unify_builder", return_value="C:/EIDE/unify_builder.dll"),
+                mock.patch.object(eide_rebuild, "find_eide_tools_dir", return_value="C:/EIDE"),
+                mock.patch.object(eide_rebuild, "find_toolchain_root", side_effect=FakeMismatch()),
+                redirect_stdout(stdout_buffer),
+            ):
+                exit_code = eide_rebuild.main(["rebuild", str(workspace_path)])
+
+            payload = json.loads(stdout_buffer.getvalue())
+            self.assertEqual(exit_code, 3)
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["errorCode"], "GCC_VERSION_MISMATCH")
 
     def test_main_emits_error_json_for_multiple_workspace_files(self) -> None:
         with make_temp_dir() as temp_dir:

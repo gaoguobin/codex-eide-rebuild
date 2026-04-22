@@ -86,20 +86,20 @@ def _resolve_project_input_or_raise(input_path: str) -> ProjectInput:
         raise ExitError(2, missing_path, error_code) from error
 
 
-def _resolve_required_tools() -> tuple[str, str, str, str]:
+def _resolve_required_tools(workspace_path: str = "") -> tuple[str, str, str, str]:
     try:
         tool_paths = (
             find_dotnet(),
             find_unify_builder(),
             find_eide_tools_dir(),
-            find_toolchain_root(),
+            find_toolchain_root(workspace_path),
         )
         runtime_check = check_unify_builder_runtime(tool_paths[0], tool_paths[1])
         if not runtime_check.get("ok", False):
             raise ExitError(7, str(runtime_check.get("message") or "Unify builder runtime check failed."), "DOTNET_RUNTIME_MISSING")
         return tool_paths
     except FileNotFoundError as error:
-        raise ExitError(3, str(error), "TOOL_NOT_FOUND") from error
+        raise ExitError(3, str(error), getattr(error, "error_code", "TOOL_NOT_FOUND")) from error
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         if not model.target_names:
             raise ExitError(6, "No targets found in .eide/eide.yml.", "TARGETS_NOT_FOUND")
 
-        dotnet_path, unify_builder_path, eide_tools_dir, toolchain_root = _resolve_required_tools()
+        dotnet_path, unify_builder_path, eide_tools_dir, toolchain_root = _resolve_required_tools(project_input.workspace_path)
 
         target_results: list[TargetResult] = []
         transcript_parts: list[str] = []

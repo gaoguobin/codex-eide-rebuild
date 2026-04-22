@@ -11,6 +11,13 @@ from .eide_model import require_yaml_module
 from .platform import current_platform, normalize_path
 
 
+class ToolchainMismatchError(FileNotFoundError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.error_code = "GCC_VERSION_MISMATCH"
+        self.exit_code = 3
+
+
 def _resolve_existing_path(path_value: str, expect_dir: bool = False) -> str:
     candidate = Path(path_value).expanduser()
     if expect_dir:
@@ -23,6 +30,13 @@ def _resolve_existing_path(path_value: str, expect_dir: bool = False) -> str:
 
 def _path_if_dir(path_value: Path) -> str | None:
     return normalize_path(path_value.resolve()) if path_value.is_dir() else None
+
+
+def _resolve_non_strict_path(path_value: Path) -> Path:
+    try:
+        return path_value.expanduser().resolve()
+    except OSError:
+        return path_value.expanduser()
 
 
 def _version_key(path_value: Path) -> tuple[int, ...]:
@@ -48,6 +62,14 @@ def _iter_existing_dirs(paths: list[Path]) -> list[Path]:
     return result
 
 
+def _preferred_candidate(candidates: list[Path]) -> Path:
+    return sorted(
+        candidates,
+        key=lambda path: (_version_key(path), path.stat().st_mtime),
+        reverse=True,
+    )[0]
+
+
 def _extension_roots() -> list[Path]:
     roots: list[Path] = []
     override = os.environ.get("EIDE_REBUILD_VSCODE_EXTENSIONS_ROOT")
@@ -71,11 +93,7 @@ def find_eide_extension_dir() -> str:
     if not candidates:
         raise FileNotFoundError("EIDE extension directory")
 
-    best = sorted(
-        candidates,
-        key=lambda path: (_version_key(path), path.stat().st_mtime),
-        reverse=True,
-    )[0]
+    best = _preferred_candidate(candidates)
     return normalize_path(best.resolve())
 
 
@@ -171,37 +189,126 @@ def find_eide_utils_dir() -> str:
 
 
 def _toolchain_search_roots() -> list[Path]:
-    roots: list[Path] = []
     override = os.environ.get("EIDE_REBUILD_TOOLS_ROOT")
     if override:
-        roots.append(Path(override))
+        return _iter_existing_dirs([Path(override)])
+
+    roots: list[Path] = []
     home_override = os.environ.get("EIDE_REBUILD_HOME")
     if home_override:
-        roots.append(Path(home_override) / ".eide" / "tools")
+        return _iter_existing_dirs([Path(home_override) / ".eide" / "tools"])
     roots.append(Path.home() / ".eide" / "tools")
     return _iter_existing_dirs(roots)
 
 
-def find_toolchain_root() -> str:
+def _workspace_settings(workspace_path: str) -> dict[str, object]:
+    if not workspace_path:
+        return {}
+    path_obj = Path(workspace_path).expanduser()
+    if not path_obj.is_file():
+        return {}
+    try:
+        payload = json.loads(path_obj.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    settings = payload.get("settings") or {}
+    return settings if isinstance(settings, dict) else {}
+
+
+def _expand_workspace_path(path_value: str) -> str:
+    expanded = str(path_value or "").strip()
+    if not expanded:
+        return ""
+    home_dir = str(Path.home())
+    replacements = {
+        "${userHome}": home_dir,
+        "${userRoot}": home_dir,
+    }
+    for token, replacement in replacements.items():
+        expanded = expanded.replace(token, replacement)
+    expanded = os.path.expandvars(expanded)
+    return normalize_path(_resolve_non_strict_path(Path(expanded)))
+
+
+def _extract_gcc_version(path_value: str | Path) -> str:
+    match = re.search(r"gcc[-_]?(\d+\.\d+\.\d+)", str(path_value), re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return ""
+
+
+def _workspace_gcc_requirement(workspace_path: str) -> dict[str, str]:
+    settings = _workspace_settings(workspace_path)
+    install_dir = ""
+    setting_key = ""
+    for key in sorted(settings):
+        if not re.fullmatch(r"EIDE\..+\.GCC\.InstallDirectory", str(key), re.IGNORECASE):
+            continue
+        value = settings.get(key)
+        if isinstance(value, str) and value.strip():
+            setting_key = str(key)
+            install_dir = _expand_workspace_path(value)
+            break
+    version = _extract_gcc_version(install_dir)
+    return {
+        "settingKey": setting_key,
+        "installDir": install_dir,
+        "version": version,
+    }
+
+
+def _toolchain_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    patterns = ("**/bin/arm-none-eabi-gcc.exe", "**/bin/arm-none-eabi-gcc")
+    for root in _toolchain_search_roots():
+        for pattern in patterns:
+            for gcc_path in root.glob(pattern):
+                candidate = _resolve_non_strict_path(gcc_path.parent.parent)
+                normalized = normalize_path(candidate)
+                if normalized in seen or not candidate.is_dir():
+                    continue
+                seen.add(normalized)
+                candidates.append(candidate)
+    return candidates
+
+
+def _format_toolchain_candidates(candidates: list[Path]) -> str:
+    formatted: list[str] = []
+    for candidate in sorted(candidates, key=lambda path: normalize_path(path)):
+        version = _extract_gcc_version(candidate.name) or "unknown"
+        formatted.append(f"{version} @ {normalize_path(candidate)}")
+    return ", ".join(formatted)
+
+
+def find_toolchain_root(workspace_path: str = "") -> str:
     override = os.environ.get("EIDE_REBUILD_TOOLCHAIN_ROOT") or os.environ.get("COMPILER_DIR")
     if override:
         return _resolve_existing_path(override, expect_dir=True)
 
-    candidates: list[Path] = []
-    for root in _toolchain_search_roots():
-        for gcc_path in root.glob("**/bin/arm-none-eabi-gcc.exe"):
-            candidates.append(gcc_path.parent.parent)
-        for gcc_path in root.glob("**/bin/arm-none-eabi-gcc"):
-            candidates.append(gcc_path.parent.parent)
+    candidates = _toolchain_candidates()
     if not candidates:
         raise FileNotFoundError("toolchain root")
 
-    best = sorted(
-        candidates,
-        key=lambda path: (_version_key(path), path.stat().st_mtime),
-        reverse=True,
-    )[0]
-    return normalize_path(best.resolve())
+    requirement = _workspace_gcc_requirement(workspace_path)
+    configured_install_dir = requirement.get("installDir", "")
+    configured_version = requirement.get("version", "")
+
+    if configured_install_dir:
+        for candidate in candidates:
+            if normalize_path(candidate) == configured_install_dir:
+                return normalize_path(candidate)
+
+    if configured_version:
+        matches = [candidate for candidate in candidates if _extract_gcc_version(candidate.name) == configured_version]
+        if matches:
+            return normalize_path(_preferred_candidate(matches))
+        discovered = _format_toolchain_candidates(candidates)
+        raise ToolchainMismatchError(
+            f"GCC {configured_version} from workspace was requested; discovered [{discovered}]"
+        )
+
+    return normalize_path(_preferred_candidate(candidates))
 
 
 def build_process_env(extra_env: dict[str, str] | None, toolchain_root: str) -> dict[str, str]:

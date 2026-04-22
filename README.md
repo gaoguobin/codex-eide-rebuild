@@ -57,7 +57,8 @@ Explicit command-style prompts also work:
 - Resolves a `.code-workspace` file or a project directory with exactly one workspace file
 - Reads the current `.eide/eide.yml` project model and related config files
 - Generates `builder.params` on demand
-- Auto-discovers the EIDE extension, tools, toolchain, and `dotnet`
+- Auto-discovers the latest EIDE extension, model/tools, `unify_builder`, and `dotnet`
+- Matches GCC to the EIDE workspace configuration when a `.code-workspace` file provides a configured install directory
 - Runs `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
 - Returns one complete JSON result to the agent
 

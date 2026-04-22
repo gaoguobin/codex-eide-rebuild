@@ -57,7 +57,8 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 - 解析 `.code-workspace` 或只包含一个工作区文件的工程目录
 - 读取当前工程的 `.eide/eide.yml` 和相关配置
 - 现场生成 `builder.params`
-- 自动发现 EIDE 扩展、工具目录、工具链和 `dotnet`
+- 自动发现环境里最新的 EIDE 扩展、模型/工具目录、`unify_builder` 和 `dotnet`
+- 当 `.code-workspace` 提供 GCC 安装配置时，按工程配置匹配 GCC
 - 调用 `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
 - 把完整结果以单个 JSON 输出给 Agent
 
