@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
+import uuid
 from pathlib import Path
 
 
@@ -39,12 +41,73 @@ def trees_match(left_root: Path, right_root: Path) -> bool:
     return collect(left_root) == collect(right_root)
 
 
+def _temp_sibling(path: Path, suffix: str) -> Path:
+    return path.parent / f".{path.name}.sync-{uuid.uuid4().hex}{suffix}"
+
+
+def _safe_remove(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink(missing_ok=True)
+
+
+def _stage_file_copy(source: Path, target: Path) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staged = _temp_sibling(target, ".tmp")
+    try:
+        shutil.copy2(source, staged)
+        return staged
+    except Exception:
+        staged.unlink(missing_ok=True)
+        raise
+
+
+def _stage_tree_copy(source: Path, target: Path) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staged = _temp_sibling(target, ".tmp")
+    try:
+        shutil.copytree(source, staged)
+        return staged
+    except Exception:
+        if staged.exists():
+            shutil.rmtree(staged, ignore_errors=True)
+        raise
+
+
+def _swap_tree(staged: Path, target: Path) -> Path | None:
+    backup: Path | None = None
+    if target.exists():
+        backup = _temp_sibling(target, ".bak")
+        target.replace(backup)
+    staged.replace(target)
+    return backup
+
+
 def sync_copy() -> int:
-    RUNNER_TARGET.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(RUNNER_SOURCE, RUNNER_TARGET)
-    if PACKAGE_TARGET.exists():
-        shutil.rmtree(PACKAGE_TARGET)
-    shutil.copytree(PACKAGE_SOURCE, PACKAGE_TARGET)
+    staged_package = _stage_tree_copy(PACKAGE_SOURCE, PACKAGE_TARGET)
+    staged_runner = _stage_file_copy(RUNNER_SOURCE, RUNNER_TARGET)
+    package_backup: Path | None = None
+    package_swapped = False
+
+    try:
+        package_backup = _swap_tree(staged_package, PACKAGE_TARGET)
+        package_swapped = True
+        os.replace(staged_runner, RUNNER_TARGET)
+    except Exception:
+        staged_runner.unlink(missing_ok=True)
+        if staged_package.exists():
+            shutil.rmtree(staged_package, ignore_errors=True)
+        if package_swapped:
+            if PACKAGE_TARGET.exists():
+                _safe_remove(PACKAGE_TARGET)
+            if package_backup is not None and package_backup.exists():
+                package_backup.replace(PACKAGE_TARGET)
+        raise
+    finally:
+        if package_backup is not None and package_backup.exists():
+            shutil.rmtree(package_backup, ignore_errors=True)
+
     LEGACY_VSIX_TARGET.unlink(missing_ok=True)
     print("Synchronized runtime artifacts into the skill bundle.")
     return 0
