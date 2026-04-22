@@ -932,6 +932,29 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(result["errorCode"], "TOOL_NOT_FOUND")
         self.assertIn("6.0", result["message"])
 
+    def test_unify_builder_runtime_check_reports_timeout(self) -> None:
+        with make_temp_dir() as temp_dir:
+            unify_builder = Path(temp_dir) / "unify_builder.dll"
+            unify_builder.write_text("dll", encoding="utf-8")
+
+            with mock.patch(
+                "eide_rebuild.tools.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(
+                    cmd=["C:/dotnet/dotnet.exe", "exec"],
+                    timeout=30,
+                    output="partial stdout",
+                    stderr="partial stderr",
+                ),
+            ) as run_mock:
+                result = eide_rebuild.check_unify_builder_runtime("C:/dotnet/dotnet.exe", unify_builder.as_posix())
+
+        self.assertFalse(result["ok"])
+        self.assertIn("timed out", result["message"])
+        self.assertIn("30", result["message"])
+        self.assertEqual(result["stdout"], "partial stdout")
+        self.assertEqual(result["stderr"], "partial stderr")
+        self.assertEqual(run_mock.call_args.kwargs["timeout"], 30)
+
     def test_doctor_reports_missing_pyyaml_dependency(self) -> None:
         with (
             mock.patch(
@@ -1009,6 +1032,30 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(step.command, ["dotnet", "unify_builder.dll"])
         self.assertEqual(step.cwd, Path.cwd().resolve().as_posix())
         run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_args.kwargs["timeout"], 60)
+
+    def test_run_step_returns_timeout_result(self) -> None:
+        timeout_error = subprocess.TimeoutExpired(
+            cmd=["dotnet", "unify_builder.dll"],
+            timeout=60,
+            output="partial stdout",
+            stderr="partial stderr",
+        )
+
+        with mock.patch("eide_rebuild.executor.subprocess.run", side_effect=timeout_error):
+            step = eide_rebuild.run_step(
+                kind="unify-builder",
+                name="build Debug",
+                command=["dotnet", "unify_builder.dll"],
+                cwd=Path.cwd(),
+            )
+
+        self.assertFalse(step.ok)
+        self.assertEqual(step.exit_code, 124)
+        self.assertEqual(step.error_code, "STEP_TIMEOUT")
+        self.assertIn("60", step.message)
+        self.assertEqual(step.stdout, "partial stdout")
+        self.assertEqual(step.stderr, "partial stderr")
 
     def test_build_unify_builder_command_uses_dotnet_exec_with_roll_forward(self) -> None:
         with make_temp_dir() as temp_dir:
@@ -1248,6 +1295,64 @@ targets:
             self.assertFalse(target.ok)
             self.assertEqual(target.exit_code, 8)
             self.assertEqual(target.error_code, "COMPILER_LOG_MISSING")
+
+    def test_rebuild_target_propagates_step_timeout(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            eide_dir = project_dir / ".eide"
+            eide_dir.mkdir()
+            (project_dir / "linker.ld").write_text("MEMORY {}\n", encoding="utf-8")
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M33
+        scatterFilePath: linker.ld
+        options:
+          global: {}
+          linker: { output-format: elf }
+''',
+                encoding="utf-8",
+            )
+            step = eide_rebuild.StepResult(
+                kind="unify-builder",
+                name="build Debug",
+                ok=False,
+                exit_code=124,
+                error_code="STEP_TIMEOUT",
+                message="build Debug timed out after 60 seconds.",
+                started_at="2026-04-16T08:13:04Z",
+                finished_at="2026-04-16T08:14:04Z",
+                duration_ms=60000,
+                stdout="partial stdout",
+                stderr="partial stderr",
+                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params", "--rebuild"],
+                cwd=project_dir.as_posix(),
+            )
+
+            with mock.patch("eide_rebuild.executor.run_step", return_value=step):
+                target = eide_rebuild.rebuild_target(
+                    project_root=project_dir,
+                    project_name="demo",
+                    target_name="Debug",
+                    target_index=1,
+                    target_total=1,
+                    dotnet_path="C:/dotnet/dotnet.exe",
+                    unify_builder_path="C:/EIDE/unify_builder.dll",
+                    eide_tools_dir="C:/EIDE",
+                    toolchain_root="C:/gcc-arm",
+                )
+
+            self.assertFalse(target.ok)
+            self.assertEqual(target.exit_code, 124)
+            self.assertEqual(target.error_code, "STEP_TIMEOUT")
+            self.assertIn("60", target.message)
 
 
 class TargetHookTests(unittest.TestCase):

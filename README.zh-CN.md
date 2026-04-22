@@ -61,6 +61,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 - 当 `.code-workspace` 提供 GCC 安装配置时，按工程配置匹配 GCC
 - 调用 `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
 - 把完整结果以单个 JSON 输出给 Agent
+- 编译步骤 60 秒无响应时返回 `STEP_TIMEOUT`
 
 ## 开发
 

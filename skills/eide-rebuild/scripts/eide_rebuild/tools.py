@@ -11,6 +11,10 @@ from .eide_model import require_yaml_module
 from .platform import current_platform, normalize_path
 
 
+UNIFY_BUILDER_CHECK_TIMEOUT_SECONDS = 30
+DOTNET_RUNTIMES_TIMEOUT_SECONDS = 10
+
+
 class ToolchainMismatchError(FileNotFoundError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -26,6 +30,14 @@ def _resolve_existing_path(path_value: str, expect_dir: bool = False) -> str:
     elif candidate.exists():
         return normalize_path(candidate.resolve())
     raise FileNotFoundError(str(candidate))
+
+
+def _timeout_payload(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return str(value)
 
 
 def _path_if_dir(path_value: Path) -> str | None:
@@ -335,6 +347,7 @@ def build_process_env(extra_env: dict[str, str] | None, toolchain_root: str) -> 
 
 def check_unify_builder_runtime(dotnet_path: str, unify_builder_path: str) -> dict[str, object]:
     unify_builder_dll = resolve_unify_builder_dll(unify_builder_path)
+    launch_command = [dotnet_path, "exec", "--roll-forward", "Major", unify_builder_dll, "-v"]
     runtime_config = Path(unify_builder_dll).with_suffix(".runtimeconfig.json")
     framework_name = ""
     framework_version = ""
@@ -345,24 +358,41 @@ def check_unify_builder_runtime(dotnet_path: str, unify_builder_path: str) -> di
         framework_name = str(framework.get("name") or "")
         framework_version = str(framework.get("version") or "")
 
-    completed = subprocess.run(
-        [dotnet_path, "exec", "--roll-forward", "Major", unify_builder_dll, "-v"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            launch_command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=UNIFY_BUILDER_CHECK_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        return {
+            "ok": False,
+            "requiredFramework": framework_name,
+            "requiredVersion": framework_version,
+            "installedVersions": [],
+            "message": f"unify_builder runtime check timed out after {UNIFY_BUILDER_CHECK_TIMEOUT_SECONDS} seconds.",
+            "stdout": _timeout_payload(error.output),
+            "stderr": _timeout_payload(error.stderr),
+            "launchCommand": launch_command,
+        }
     ok = completed.returncode == 0
     message = ""
     if not ok:
         message = completed.stderr.strip() or completed.stdout.strip() or "Failed to start unify_builder."
 
     installed_versions: list[str] = []
-    runtimes = subprocess.run(
-        [dotnet_path, "--list-runtimes"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        runtimes = subprocess.run(
+            [dotnet_path, "--list-runtimes"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=DOTNET_RUNTIMES_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        runtimes = subprocess.CompletedProcess(args=[dotnet_path, "--list-runtimes"], returncode=124, stdout="", stderr="")
     if runtimes.returncode == 0 and framework_name:
         for raw_line in runtimes.stdout.splitlines():
             match = re.match(r"^(?P<name>\S+)\s+(?P<version>\d+\.\d+\.\d+)", raw_line.strip())
@@ -376,7 +406,9 @@ def check_unify_builder_runtime(dotnet_path: str, unify_builder_path: str) -> di
         "requiredVersion": framework_version,
         "installedVersions": installed_versions,
         "message": message,
-        "launchCommand": [dotnet_path, "exec", "--roll-forward", "Major", unify_builder_dll, "-v"],
+        "stdout": completed.stdout or "",
+        "stderr": completed.stderr or "",
+        "launchCommand": launch_command,
     }
 
 

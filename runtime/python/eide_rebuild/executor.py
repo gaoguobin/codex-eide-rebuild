@@ -14,12 +14,25 @@ from .result_model import StepResult, TargetResult
 from .tools import build_process_env, resolve_unify_builder_dll
 
 
+BUILD_STEP_TIMEOUT_SECONDS = 60
+TIMEOUT_EXIT_CODE = 124
+
+
+def _timeout_payload(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(locale.getpreferredencoding(False), errors="replace")
+    return str(value)
+
+
 def run_step(
     kind: str,
     name: str,
     command: list[str] | str,
     cwd: Path,
     env: dict[str, str] | None = None,
+    timeout_seconds: int = BUILD_STEP_TIMEOUT_SECONDS,
 ) -> StepResult:
     start_mark = time.perf_counter()
     started_at = utc_now()
@@ -27,6 +40,7 @@ def run_step(
         "cwd": cwd,
         "capture_output": True,
         "text": True,
+        "timeout": timeout_seconds,
     }
     if env:
         merged_env = os.environ.copy()
@@ -34,7 +48,26 @@ def run_step(
         run_kwargs["env"] = merged_env
     if isinstance(command, str):
         run_kwargs["shell"] = True
-    completed = subprocess.run(command, **run_kwargs)
+    command_parts = [command] if isinstance(command, str) else [str(part) for part in command]
+    try:
+        completed = subprocess.run(command, **run_kwargs)
+    except subprocess.TimeoutExpired as error:
+        finished_at = utc_now()
+        return StepResult(
+            kind=kind,
+            name=name,
+            ok=False,
+            exit_code=TIMEOUT_EXIT_CODE,
+            error_code="STEP_TIMEOUT",
+            message=f"{name} timed out after {timeout_seconds} seconds.",
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=elapsed_ms(start_mark),
+            stdout=_timeout_payload(error.output),
+            stderr=_timeout_payload(error.stderr),
+            command=command_parts,
+            cwd=normalize_path(cwd.resolve()),
+        )
     finished_at = utc_now()
     exit_code = int(completed.returncode)
     return StepResult(
@@ -49,7 +82,7 @@ def run_step(
         duration_ms=elapsed_ms(start_mark),
         stdout=completed.stdout or "",
         stderr=completed.stderr or "",
-        command=[command] if isinstance(command, str) else [str(part) for part in command],
+        command=command_parts,
         cwd=normalize_path(cwd.resolve()),
     )
 
@@ -317,9 +350,9 @@ def rebuild_target(
         steps.append(build_step)
 
         if not build_step.ok:
-            error_code = "UNIFY_BUILDER_FAILED"
+            error_code = build_step.error_code if build_step.error_code == "STEP_TIMEOUT" else "UNIFY_BUILDER_FAILED"
             message = build_step.message or f"{target_name} build failed."
-            exit_code = 6
+            exit_code = build_step.exit_code if build_step.error_code == "STEP_TIMEOUT" else 6
         elif compiler_log_path.exists():
             compiler_log = _read_text_file(compiler_log_path)
             memory = _parse_memory_regions(build_step.stdout)

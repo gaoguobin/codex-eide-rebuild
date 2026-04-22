@@ -61,6 +61,7 @@ Explicit command-style prompts also work:
 - Matches GCC to the EIDE workspace configuration when a `.code-workspace` file provides a configured install directory
 - Runs `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params>`
 - Returns one complete JSON result to the agent
+- Fails hung build steps with `STEP_TIMEOUT` after 60 seconds
 
 ## Output protocol
 
