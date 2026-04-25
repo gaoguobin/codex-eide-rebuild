@@ -808,7 +808,7 @@ class ToolDiscoveryTests(unittest.TestCase):
                     {
                         "folders": [{"path": "."}],
                         "settings": {
-                            "EIDE.ARM.GCC.InstallDirectory": "${userHome}/.eide/tools/xpack-arm-none-eabi-gcc-14.2.1-1.1"
+                            "EIDE.ARM.GCC.InstallDirectory": old_root.parent.as_posix()
                         },
                     }
                 ),
@@ -819,6 +819,33 @@ class ToolDiscoveryTests(unittest.TestCase):
                 self.assertEqual(
                     eide_rebuild.find_toolchain_root(workspace_path.resolve().as_posix()),
                     old_root.parent.resolve().as_posix(),
+                )
+
+    def test_uses_workspace_configured_gcc_outside_scan_roots(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir) / "project"
+            scan_root = Path(temp_dir) / "scan-root"
+            configured_root = Path(temp_dir) / "custom" / "xpack-arm-none-eabi-gcc-15.2.1-1.1"
+            configured_bin = configured_root / "bin"
+            project_dir.mkdir(parents=True)
+            scan_root.mkdir(parents=True)
+            configured_bin.mkdir(parents=True)
+            (configured_bin / "arm-none-eabi-gcc.exe").write_text("gcc", encoding="utf-8")
+            workspace_path = project_dir / "demo.code-workspace"
+            workspace_path.write_text(
+                json.dumps(
+                    {
+                        "folders": [{"path": "."}],
+                        "settings": {"EIDE.ARM.GCC.InstallDirectory": configured_root.as_posix()},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.dict(os.environ, {"EIDE_REBUILD_TOOLS_ROOT": str(scan_root)}, clear=True):
+                self.assertEqual(
+                    eide_rebuild.find_toolchain_root(workspace_path.resolve().as_posix()),
+                    configured_root.resolve().as_posix(),
                 )
 
     def test_reports_workspace_gcc_mismatch_when_no_candidate_matches(self) -> None:
@@ -835,7 +862,7 @@ class ToolDiscoveryTests(unittest.TestCase):
                     {
                         "folders": [{"path": "."}],
                         "settings": {
-                            "EIDE.ARM.GCC.InstallDirectory": "${userHome}/.eide/tools/xpack-arm-none-eabi-gcc-15.2.1-1.1"
+                            "EIDE.ARM.GCC.InstallDirectory": (Path(temp_dir) / "missing" / "xpack-arm-none-eabi-gcc-15.2.1-1.1").as_posix()
                         },
                     }
                 ),

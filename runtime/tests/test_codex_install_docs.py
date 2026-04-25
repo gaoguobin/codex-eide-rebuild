@@ -35,3 +35,8 @@ class CodexInstallDocsTests(unittest.TestCase):
         self.assertIn(UPDATE_URL, content)
         self.assertIn(UNINSTALL_URL, content)
         self.assertIn(FALLBACK_COMMAND, content)
+
+    def test_install_does_not_require_vscode_cli(self) -> None:
+        content = INSTALL_DOC.read_text(encoding="utf-8")
+        self.assertNotIn("Get-Command code", content)
+        self.assertNotIn("VS Code CLI command `code` is required before installing", content)

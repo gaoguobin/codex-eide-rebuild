@@ -253,13 +253,11 @@ def _expand_workspace_path(path_value: str) -> str:
     expanded = str(path_value or "").strip()
     if not expanded:
         return ""
-    home_dir = str(Path.home())
-    replacements = {
-        "${userHome}": home_dir,
-        "${userRoot}": home_dir,
-    }
-    for token, replacement in replacements.items():
-        expanded = expanded.replace(token, replacement)
+    home_tokens = ("${userHome}", "${userRoot}")
+    if any(token in expanded for token in home_tokens):
+        home_dir = str(Path.home())
+        for token in home_tokens:
+            expanded = expanded.replace(token, home_dir)
     expanded = os.path.expandvars(expanded)
     return normalize_path(_resolve_non_strict_path(Path(expanded)))
 
@@ -291,6 +289,14 @@ def _workspace_gcc_requirement(workspace_path: str) -> dict[str, str]:
     }
 
 
+def _is_gcc_toolchain_root(path_value: str | Path) -> bool:
+    root = Path(path_value)
+    return any(
+        (root / "bin" / executable_name).is_file()
+        for executable_name in ("arm-none-eabi-gcc.exe", "arm-none-eabi-gcc")
+    )
+
+
 def _toolchain_candidates() -> list[Path]:
     candidates: list[Path] = []
     seen: set[str] = set()
@@ -320,18 +326,17 @@ def find_toolchain_root(workspace_path: str = "") -> str:
     if override:
         return _resolve_existing_path(override, expect_dir=True)
 
-    candidates = _toolchain_candidates()
-    if not candidates:
-        raise FileNotFoundError("toolchain root")
-
     requirement = _workspace_gcc_requirement(workspace_path)
     configured_install_dir = requirement.get("installDir", "")
     configured_version = requirement.get("version", "")
+    if configured_install_dir and _is_gcc_toolchain_root(configured_install_dir):
+        return normalize_path(Path(configured_install_dir).resolve())
 
-    if configured_install_dir:
-        for candidate in candidates:
-            if normalize_path(candidate) == configured_install_dir:
-                return normalize_path(candidate)
+    candidates = _toolchain_candidates()
+    if not candidates:
+        if configured_version:
+            raise ToolchainMismatchError(f"GCC {configured_version} from workspace was requested; discovered []")
+        raise FileNotFoundError("toolchain root")
 
     if configured_version:
         matches = [candidate for candidate in candidates if _extract_gcc_version(candidate.name) == configured_version]
