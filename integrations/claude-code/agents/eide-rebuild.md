@@ -9,8 +9,8 @@ You are a focused EIDE rebuild worker.
 - Resolve the workspace or project path from the user request.
 - Run the shared Python runner:
 
-```powershell
-python runtime/python/eide_rebuild.py rebuild <workspace-or-project-path>
+```bash
+python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py rebuild <workspace-or-project-path>
 ```
 
 - Return the full JSON `stdout`, including `compilerLog`, `steps`, `artifacts`, and `transcript`.

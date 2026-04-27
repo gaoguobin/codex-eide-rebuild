@@ -9,8 +9,8 @@ Run the shared EIDE rebuild runner for the provided path.
 2. If no argument is present, infer the current project path only when the current working directory contains exactly one `.code-workspace` file.
 3. Execute:
 
-```powershell
-python runtime/python/eide_rebuild.py rebuild $ARGUMENTS
+```bash
+python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py rebuild $ARGUMENTS
 ```
 
 4. Return the complete JSON result and keep `compilerLog`, `steps`, `artifacts`, and `transcript` intact.
