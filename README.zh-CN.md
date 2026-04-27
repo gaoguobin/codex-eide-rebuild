@@ -1,46 +1,46 @@
 # codex-eide-rebuild
 
-`codex-eide-rebuild` 提供两部分能力：GitHub 可安装的 Codex skill、Windows Python runner。它会直接触发 EIDE 的构建链路，并把完整结果以单个 JSON 返回给 Agent。
+`codex-eide-rebuild` 提供 Windows Python runner 和 Agent skill，用于触发 EIDE 构建链路并把完整结果以单个 JSON 返回。同时支持 Codex 和 Claude Code。
 
 ## 安装
 
-给工程师的一句话：
+### Codex
 
 ```text
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
 ```
 
-安装入口：
+### Claude Code
 
-`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md`
-
-备用入口：
-
-```powershell
-python install-skill-from-github.py --repo gaoguobin/codex-eide-rebuild --path skills/eide-rebuild
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/INSTALL.md
 ```
 
-第一次安装通常会有一次权限批准。Agent 会按 `INSTALL.md` 完成安装、运行 `doctor`、回报 JSON 结果。`doctor.ok=true` 之后重启 Codex。
+Agent 会按安装文档完成安装、运行 `doctor`、回报 JSON 结果。`doctor.ok=true` 之后重启 Agent。
 
 ## 升级
 
-```text
-Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md
-```
+### Codex
 
-升级会更新本地 repo，并刷新 direct-builder 运行时。升级后重启 Codex。
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md`
+
+### Claude Code
+
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UPDATE.md`
 
 ## 卸载
 
-```text
-Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md
-```
+### Codex
 
-卸载会移除 skill、本地 repo，并清理旧版 bridge 安装留下的本地状态。卸载后重启 Codex。
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md`
+
+### Claude Code
+
+`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UNINSTALL.md`
 
 ## 自然语言入口
 
-安装完成后，Codex 可以用下面这类表达自动触发编译：
+安装完成后，Agent 可以用下面这类表达自动触发编译：
 
 - `你自己编译验证下对不对`
 - `帮我编译确认一下`
@@ -51,6 +51,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 
 - `EIDE rebuild C:\work\demo\project.code-workspace`
 - `EIDE subagent rebuild C:\work\demo\project.code-workspace`
+- `/eide-rebuild C:\work\demo\project.code-workspace`（Claude Code 斜杠命令）
 
 ## 行为
 
@@ -77,5 +78,5 @@ python -m unittest discover -s .\runtime\tests -p "test_*.py"
 - `.codex/`：面向 Codex 的安装、升级、卸载文档
 - `runtime/`：共享运行时
 - `skills/eide-rebuild/`：Codex skill
-- `integrations/claude-code/`：Claude Code 第二阶段模板
+- `integrations/claude-code/`：Claude Code 安装文档、command 和 agent 模板
 - `scripts/`：同步和维护脚本
