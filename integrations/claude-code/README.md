@@ -1,6 +1,6 @@
 # Claude Code integration templates
 
-These files prepare the phase 2 Claude Code integration without duplicating the shared runtime.
+These files provide Claude Code command and subagent templates that call the shared Python runtime.
 
 ## Layout
 
@@ -8,6 +8,8 @@ These files prepare the phase 2 Claude Code integration without duplicating the 
 - `agents/eide-rebuild.md` contains a reusable subagent template
 
 ## How to use
+
+For normal installs, follow `INSTALL.md`, `UPDATE.md`, or `UNINSTALL.md`.
 
 1. Copy `commands/eide-rebuild.md` to `.claude/commands/eide-rebuild.md` in your project or user configuration.
 2. Copy `agents/eide-rebuild.md` to `.claude/agents/eide-rebuild.md`.

@@ -1,6 +1,7 @@
 # codex-eide-rebuild install for Claude Code
 
 Use these instructions on Windows to install the EIDE rebuild skill for Claude Code.
+Run the shell blocks with Claude Code's Bash tool or Git Bash.
 
 ## One-paste prompt for engineers
 
@@ -37,12 +38,16 @@ command -v python >/dev/null && echo "ok: python"   || echo "FAIL: python not fo
 
 Stop and report any failures to the user.
 
-### 3. Clone the repository
+### 3. Install or update the repository
 
-If `~/.codex/codex-eide-rebuild` already exists (e.g. from a Codex install), skip this step.
+If `~/.codex/codex-eide-rebuild` already exists (e.g. from a Codex install), update it before copying templates.
 
 ```bash
-git clone https://github.com/gaoguobin/codex-eide-rebuild.git ~/.codex/codex-eide-rebuild
+if [ -d ~/.codex/codex-eide-rebuild/.git ]; then
+  git -C ~/.codex/codex-eide-rebuild pull --ff-only
+else
+  git clone https://github.com/gaoguobin/codex-eide-rebuild.git ~/.codex/codex-eide-rebuild
+fi
 ```
 
 ### 4. Install Python dependencies

@@ -22,7 +22,7 @@ BANNED_LEGACY_BRIDGE_SNIPPETS = [
     "registration " + "file",
 ]
 TEXT_SUFFIXES = {".md", ".py", ".js", ".json", ".ps1", ".yaml", ".yml", ".txt"}
-SKIP_DIR_NAMES = {".git", ".tmp", "__pycache__"}
+SKIP_DIR_NAMES = {".git", ".tmp", ".claude", "__pycache__"}
 
 
 def _iter_repository_text_files():
@@ -35,6 +35,10 @@ def _iter_repository_text_files():
 
 
 class RepositorySanitizationTests(unittest.TestCase):
+    def test_local_claude_project_settings_are_ignored(self) -> None:
+        gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn(".claude/", gitignore.splitlines())
+
     def test_repository_text_files_are_sanitized(self) -> None:
         hits = []
         for file_path in _iter_repository_text_files():

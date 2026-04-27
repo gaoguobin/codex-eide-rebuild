@@ -1,4 +1,5 @@
 ---
+name: eide-rebuild
 description: Focused build worker for Embedded IDE for VS Code rebuild tasks. Use when compile logs are long and the main conversation should stay compact.
 tools: Bash Read Grep Glob
 model: sonnet

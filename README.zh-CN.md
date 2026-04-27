@@ -22,21 +22,29 @@ Agent 会按安装文档完成安装、运行 `doctor`、回报 JSON 结果。`d
 
 ### Codex
 
-`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md`
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UPDATE.md
+```
 
 ### Claude Code
 
-`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UPDATE.md`
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UPDATE.md
+```
 
 ## 卸载
 
 ### Codex
 
-`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md`
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/UNINSTALL.md
+```
 
 ### Claude Code
 
-`Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UNINSTALL.md`
+```text
+Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UNINSTALL.md
+```
 
 ## 自然语言入口
 
@@ -65,7 +73,39 @@ Agent 会按安装文档完成安装、运行 `doctor`、回报 JSON 结果。`d
 - 编译步骤 60 秒无响应时返回 `STEP_TIMEOUT`
 - `doctor.toolChecks` 会结构化报告环境检查失败原因
 
+## 输出协议
+
+```json
+{
+  "ok": true,
+  "errorCode": "OK",
+  "targets": [
+    {
+      "name": "Debug",
+      "ok": true
+    }
+  ]
+}
+```
+
+## 目录
+
+```text
+.codex/             面向 Codex 的安装、升级、卸载文档
+runtime/
+  python/          共享 Python runner
+  tests/           单元测试和仓库审计
+skills/
+  eide-rebuild/    可从 GitHub 安装的 Codex skill
+integrations/
+  claude-code/     Claude Code 安装文档、command 和 agent 模板
+scripts/
+  sync_skill_runtime.py
+```
+
 ## 开发
+
+同步 runtime 并运行测试：
 
 ```powershell
 python .\scripts\sync_skill_runtime.py --copy
@@ -73,10 +113,10 @@ python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"
 ```
 
-## 目录
+## 安全和隐私
 
-- `.codex/`：面向 Codex 的安装、升级、卸载文档
-- `runtime/`：共享运行时
-- `skills/eide-rebuild/`：Codex skill
-- `integrations/claude-code/`：Claude Code 安装文档、command 和 agent 模板
-- `scripts/`：同步和维护脚本
+本仓只使用脱敏示例和通用路径。运行时测试和 smoke 检查使用 mock 数据。安全问题报告请参考 `SECURITY.md`。
+
+## 上游参考
+
+本项目自动化调用上游 EIDE 项目的 Embedded IDE for VS Code 扩展构建链路。

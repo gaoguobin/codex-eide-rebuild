@@ -1,6 +1,10 @@
 # codex-eide-rebuild update for Claude Code
 
-## One-paste prompt
+Run the shell blocks with Claude Code's Bash tool or Git Bash.
+
+## One-paste prompt for engineers
+
+Paste this into Claude Code:
 
 ```text
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/UPDATE.md
