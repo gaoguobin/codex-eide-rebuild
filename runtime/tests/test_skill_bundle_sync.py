@@ -20,7 +20,7 @@ def _collect_files(root: Path) -> dict[str, bytes]:
     return {
         str(path.relative_to(root)).replace("\\", "/"): path.read_bytes()
         for path in sorted(root.rglob("*"))
-        if path.is_file()
+        if path.is_file() and "__pycache__" not in path.parts and path.suffix not in {".pyc", ".pyo"}
     }
 
 
@@ -69,7 +69,7 @@ class SkillBundleSyncTests(unittest.TestCase):
             (package_target / "module.py").write_text("old package\n", encoding="utf-8")
             legacy_vsix.write_text("legacy\n", encoding="utf-8")
 
-            def failing_copytree(source, target):
+            def failing_copytree(source, target, **kwargs):
                 raise OSError("copy failed")
 
             with (

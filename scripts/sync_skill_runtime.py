@@ -17,6 +17,7 @@ RUNNER_TARGET = REPO_ROOT / "skills" / "eide-rebuild" / "scripts" / "eide_rebuil
 PACKAGE_SOURCE = REPO_ROOT / "runtime" / "python" / "eide_rebuild"
 PACKAGE_TARGET = REPO_ROOT / "skills" / "eide-rebuild" / "scripts" / "eide_rebuild"
 LEGACY_VSIX_TARGET = REPO_ROOT / "skills" / "eide-rebuild" / "assets" / "eide-rebuild.cli-bridge-0.1.0.vsix"
+GENERATED_PYTHON_PATTERNS = ("__pycache__", "*.pyc", "*.pyo")
 
 
 # --- Helpers ---
@@ -35,7 +36,7 @@ def trees_match(left_root: Path, right_root: Path) -> bool:
         return {
             str(path.relative_to(root)).replace("\\", "/"): path.read_bytes()
             for path in sorted(root.rglob("*"))
-            if path.is_file()
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix not in {".pyc", ".pyo"}
         }
 
     return collect(left_root) == collect(right_root)
@@ -67,7 +68,7 @@ def _stage_tree_copy(source: Path, target: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     staged = _temp_sibling(target, ".tmp")
     try:
-        shutil.copytree(source, staged)
+        shutil.copytree(source, staged, ignore=shutil.ignore_patterns(*GENERATED_PYTHON_PATTERNS))
         return staged
     except Exception:
         if staged.exists():

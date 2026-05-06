@@ -105,15 +105,13 @@ def _preferred_candidate(candidates: list[Path]) -> Path:
 
 
 def _extension_roots() -> list[Path]:
-    roots: list[Path] = []
     override = os.environ.get("EIDE_REBUILD_VSCODE_EXTENSIONS_ROOT")
     if override:
-        roots.append(Path(override))
+        return _iter_existing_dirs([Path(override)])
     home_override = os.environ.get("EIDE_REBUILD_HOME")
     if home_override:
-        roots.append(Path(home_override) / ".vscode" / "extensions")
-    roots.append(Path.home() / ".vscode" / "extensions")
-    return _iter_existing_dirs(roots)
+        return _iter_existing_dirs([Path(home_override) / ".vscode" / "extensions"])
+    return _iter_existing_dirs([Path.home() / ".vscode" / "extensions"])
 
 
 def find_eide_extension_dir() -> str:

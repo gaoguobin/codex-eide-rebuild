@@ -16,7 +16,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/integrations/claude-code/INSTALL.md
 ```
 
-The agent follows the install doc, runs `doctor`, and reports the JSON result. Restart the agent after `doctor.ok=true`.
+The agent follows the install doc, runs `doctor`, and reports the JSON result. After `doctor.ok=true`, restart Codex or run `/reload-plugins` in Claude Code.
 
 ## Update
 

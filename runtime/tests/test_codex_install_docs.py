@@ -77,12 +77,27 @@ class CodexInstallDocsTests(unittest.TestCase):
                 content = readme.read_text(encoding="utf-8")
                 self.assertNotIn("`Fetch and follow instructions from", content)
 
+    def test_readmes_name_codex_restart_and_claude_reload(self) -> None:
+        english = README_EN.read_text(encoding="utf-8")
+        chinese = README_ZH.read_text(encoding="utf-8")
+        self.assertIn("restart Codex", english)
+        self.assertIn("`/reload-plugins` in Claude Code", english)
+        self.assertIn("Codex 需要重启", chinese)
+        self.assertIn("Claude Code 运行 `/reload-plugins`", chinese)
+
     def test_claude_code_lifecycle_docs_use_consistent_prompt_format(self) -> None:
         for doc in (CC_INSTALL_DOC, CC_UPDATE_DOC, CC_UNINSTALL_DOC):
             with self.subTest(doc=doc.name):
                 content = doc.read_text(encoding="utf-8")
                 self.assertIn("## One-paste prompt for engineers", content)
                 self.assertIn("Paste this into Claude Code:", content)
+
+    def test_claude_code_lifecycle_docs_use_reload_plugins(self) -> None:
+        for doc in (CC_INSTALL_DOC, CC_UPDATE_DOC, CC_UNINSTALL_DOC):
+            with self.subTest(doc=doc.name):
+                content = doc.read_text(encoding="utf-8")
+                self.assertIn("/reload-plugins", content)
+                self.assertNotIn("restart Claude Code", content)
 
     def test_chinese_readme_keeps_core_sections_in_sync(self) -> None:
         content = README_ZH.read_text(encoding="utf-8")
