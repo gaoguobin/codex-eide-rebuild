@@ -71,7 +71,7 @@ python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py doctor
 ```
 
 Report the JSON result in the reply.
-When the JSON contains `"ok": true`, tell the user to restart Claude Code so it picks up the new command and agent.
+When the JSON contains `"ok": true`, tell the user to run `/reload-plugins` so Claude Code picks up the new command and agent.
 
 ## After install
 

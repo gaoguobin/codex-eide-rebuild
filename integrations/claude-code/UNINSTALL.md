@@ -38,4 +38,4 @@ If the Codex junction exists, warn the user that removing the repo will also bre
 
 ### 3. Done
 
-Tell the user to restart Claude Code so the removed command and agent are no longer loaded.
+Tell the user to run `/reload-plugins` so the removed command and agent are no longer loaded.
