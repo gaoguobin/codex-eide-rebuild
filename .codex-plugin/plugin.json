@@ -1,0 +1,50 @@
+{
+  "name": "codex-eide-rebuild",
+  "version": "0.1.0",
+  "description": "Agent Skill for rebuilding EIDE / Embedded IDE for VS Code projects and returning structured JSON build results.",
+  "author": {
+    "name": "gaoguobin",
+    "url": "https://github.com/gaoguobin"
+  },
+  "homepage": "https://github.com/gaoguobin/codex-eide-rebuild#readme",
+  "repository": "https://github.com/gaoguobin/codex-eide-rebuild",
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "skillsmp",
+    "codex",
+    "openai-codex",
+    "codex-skill",
+    "skills",
+    "ai-agents",
+    "eide",
+    "embedded-ide",
+    "vscode",
+    "embedded-systems",
+    "firmware",
+    "build-tools",
+    "python"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "EIDE Rebuild",
+    "shortDescription": "Rebuild EIDE workspaces and return JSON build results.",
+    "longDescription": "Package an Agent Skill and Windows-first Python runner that let agents rebuild Embedded IDE for VS Code projects through EIDE unify_builder and capture compiler logs, artifacts, memory usage, stack reports, and setup diagnostics as structured JSON.",
+    "developerName": "gaoguobin",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Local workflow",
+      "Build automation",
+      "Diagnostics"
+    ],
+    "websiteURL": "https://github.com/gaoguobin/codex-eide-rebuild",
+    "privacyPolicyURL": "https://github.com/gaoguobin/codex-eide-rebuild/blob/main/SECURITY.md",
+    "termsOfServiceURL": "https://github.com/gaoguobin/codex-eide-rebuild/blob/main/LICENSE",
+    "defaultPrompt": [
+      "EIDE rebuild C:\\work\\demo\\project.code-workspace",
+      "帮我编译确认一下",
+      "先 rebuild 看结果"
+    ],
+    "brandColor": "#10A37F"
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: eide-rebuild
-description: Rebuilds an Embedded IDE for VS Code workspace through a Python runner and returns one complete JSON result. Use when the user asks to compile, rebuild, verify a build, or says phrases like "你自己编译验证下对不对", "帮我编译确认一下", "先 rebuild 看结果", or "用 EIDE 编一下".
+description: EIDE rebuild and compile Agent Skill for Embedded IDE for VS Code workspaces. Runs a Python unify_builder runner and returns one complete JSON build result.
 ---
 
 Use this skill when the user wants an EIDE project rebuilt from Codex.
@@ -8,6 +8,8 @@ Use this skill when the user wants an EIDE project rebuilt from Codex.
 ## Trigger patterns
 
 - Natural language build requests such as `你自己编译验证下对不对`
+- Natural language build requests such as `帮我编译确认一下`
+- Natural language build requests such as `先 rebuild 看结果`
 - Explicit requests such as `EIDE rebuild C:\work\demo\project.code-workspace`
 - Long-log requests such as `EIDE subagent rebuild C:\work\demo\project.code-workspace`
 
