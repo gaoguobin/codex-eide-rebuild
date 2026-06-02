@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import locale
 import os
 import re
@@ -98,6 +99,7 @@ def build_unify_builder_command(dotnet_path: str, unify_builder_path: str, build
         "-p",
         builder_params_path,
         "--rebuild",
+        "--no-color",
     ]
 
 
@@ -150,6 +152,17 @@ def _resolve_build_dir(project_root: Path, dump_path: str) -> Path:
     return (project_root / path_obj).resolve()
 
 
+def _sha256_file(path_value: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path_value.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError:
+        return ""
+    return digest.hexdigest().upper()
+
+
 def collect_output_files(project_root: Path, target_name: str, dump_path: str | None = None) -> list[dict[str, object]]:
     build_dir = _resolve_build_dir(project_root, dump_path or f"build/{target_name}")
     if not build_dir.exists():
@@ -169,8 +182,10 @@ def collect_output_files(project_root: Path, target_name: str, dump_path: str | 
         artifacts.append(
             {
                 "path": normalize_path(candidate.resolve()),
+                "fileName": candidate.name,
                 "kind": artifact_kind,
                 "size": candidate.stat().st_size,
+                "sha256": _sha256_file(candidate),
             }
         )
     return artifacts
@@ -247,10 +262,10 @@ def _parse_source_stats(stdout: str) -> dict[str, int]:
     return result
 
 
-def _parse_embedded_task_failures(stdout: str) -> list[dict[str, str]]:
+def _parse_embedded_task_failures(stdout: str) -> list[dict[str, object]]:
     task_pattern = re.compile(r"^>>\s*(?P<name>.+?)\s+\[(?P<status>done|failed)\]\s*$", re.IGNORECASE)
     current_section = "build-task"
-    failures: list[dict[str, str]] = []
+    failures: list[dict[str, object]] = []
 
     for raw_line in stdout.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         line = raw_line.strip()
@@ -277,6 +292,47 @@ def _parse_embedded_task_failures(stdout: str) -> list[dict[str, str]]:
     return failures
 
 
+def _parse_compiler_diagnostics(sources: list[tuple[str, str]]) -> list[dict[str, object]]:
+    pattern = re.compile(
+        r"^(?P<file>.+?):(?P<line>\d+)(?::(?P<column>\d+))?:\s*"
+        r"(?P<severity>fatal error|error|warning|note):\s*(?P<message>.+)$",
+        re.IGNORECASE,
+    )
+    diagnostics: list[dict[str, object]] = []
+    seen: set[tuple[object, ...]] = set()
+
+    for source_name, text in sources:
+        for raw_line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            line = raw_line.strip()
+            match = pattern.match(line)
+            if not match:
+                continue
+            column = match.group("column")
+            severity = match.group("severity").lower().replace(" ", "-")
+            diagnostic = {
+                "kind": "compiler",
+                "source": source_name,
+                "severity": severity,
+                "file": match.group("file"),
+                "line": int(match.group("line")),
+                "column": int(column) if column else None,
+                "message": match.group("message").strip(),
+            }
+            identity = (
+                diagnostic["severity"],
+                diagnostic["file"],
+                diagnostic["line"],
+                diagnostic["column"],
+                diagnostic["message"],
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            diagnostics.append(diagnostic)
+
+    return diagnostics
+
+
 def rebuild_target(
     *,
     project_root: Path,
@@ -301,6 +357,8 @@ def rebuild_target(
     builder_params_summary: dict[str, object] = {}
     memory: list[dict[str, object]] = []
     source_stats: dict[str, int] = {}
+    failures: list[dict[str, object]] = []
+    diagnostics: list[dict[str, object]] = []
     error_code = "OK"
     message = ""
     exit_code = 0
@@ -350,21 +408,46 @@ def rebuild_target(
         steps.append(build_step)
 
         if not build_step.ok:
+            diagnostics = _parse_compiler_diagnostics(
+                [
+                    ("unify-builder-stdout", build_step.stdout),
+                    ("unify-builder-stderr", build_step.stderr),
+                ]
+            )
             error_code = build_step.error_code if build_step.error_code == "STEP_TIMEOUT" else "UNIFY_BUILDER_FAILED"
             message = build_step.message or f"{target_name} build failed."
             exit_code = build_step.exit_code if build_step.error_code == "STEP_TIMEOUT" else 6
+            failures.append(
+                {
+                    "kind": "unify-builder",
+                    "name": build_step.name,
+                    "errorCode": error_code,
+                    "message": message,
+                }
+            )
         elif compiler_log_path.exists():
             compiler_log = _read_text_file(compiler_log_path)
+            diagnostics = _parse_compiler_diagnostics(
+                [
+                    ("unify-builder-stdout", build_step.stdout),
+                    ("unify-builder-stderr", build_step.stderr),
+                    ("compiler-log", compiler_log),
+                ]
+            )
             memory = _parse_memory_regions(build_step.stdout)
             source_stats = _parse_source_stats(build_step.stdout)
             embedded_failures = _parse_embedded_task_failures(build_step.stdout)
             if embedded_failures:
-                first_failure = embedded_failures[0]
                 error_code_map = {
                     "pre-build-task": "PRE_BUILD_TASK_FAILED",
                     "post-build-task": "POST_BUILD_TASK_FAILED",
                     "output-task": "OUTPUT_TASK_FAILED",
                 }
+                for failure in embedded_failures:
+                    failure["errorCode"] = error_code_map.get(str(failure["kind"]), "BUILD_TASK_FAILED")
+                    failure["message"] = f"{failure['name']} failed inside unify_builder."
+                failures.extend(embedded_failures)
+                first_failure = embedded_failures[0]
                 error_code = error_code_map.get(first_failure["kind"], "BUILD_TASK_FAILED")
                 message = f"{first_failure['name']} failed inside unify_builder."
                 exit_code = 4
@@ -372,11 +455,27 @@ def rebuild_target(
             error_code = "COMPILER_LOG_MISSING"
             message = f"compiler.log not found: {normalize_path(compiler_log_path)}"
             exit_code = 8
+            failures.append(
+                {
+                    "kind": "compiler-log",
+                    "name": "read compiler.log",
+                    "errorCode": error_code,
+                    "message": message,
+                }
+            )
     except Exception as error:
         if exit_code == 0:
             error_code = "BUILDER_PARAMS_GENERATION_FAILED"
             message = str(error)
             exit_code = 4
+            failures.append(
+                {
+                    "kind": "generate-builder-params",
+                    "name": f"generate {target_name} builder.params",
+                    "errorCode": error_code,
+                    "message": message,
+                }
+            )
 
     finished_at = utc_now()
     artifacts = collect_output_files(project_root, target_name, builder_params_summary.get("dumpPath") or None)
@@ -399,6 +498,8 @@ def rebuild_target(
         stack_report_json_path=normalize_path(stack_report_json_path.resolve()) if stack_report_json_path.exists() else "",
         stack_report_html_path=normalize_path(stack_report_html_path.resolve()) if stack_report_html_path.exists() else "",
         source_stats=source_stats,
+        failures=failures,
+        diagnostics=diagnostics,
         memory=memory,
         artifacts=artifacts,
         transcript=transcript,

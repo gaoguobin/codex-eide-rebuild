@@ -15,6 +15,7 @@ _KEY_MAP = {
     "workspace_path": "workspacePath",
     "project_root": "projectRoot",
     "project_name": "projectName",
+    "project_uid": "projectUid",
     "started_at": "startedAt",
     "finished_at": "finishedAt",
     "duration_ms": "durationMs",
@@ -66,6 +67,8 @@ class TargetResult:
     stack_report_json_path: str = ""
     stack_report_html_path: str = ""
     transcript: str = ""
+    failures: list[dict[str, Any]] = field(default_factory=list)
+    diagnostics: list[dict[str, Any]] = field(default_factory=list)
     memory: list[dict[str, Any]] = field(default_factory=list)
     artifacts: list[dict[str, Any]] = field(default_factory=list)
     steps: list[StepResult] = field(default_factory=list)
@@ -83,6 +86,7 @@ class RunResult:
     workspace_path: str = ""
     project_root: str = ""
     project_name: str = ""
+    project_uid: str = ""
     started_at: str = ""
     finished_at: str = ""
     duration_ms: int = 0
@@ -121,6 +125,7 @@ def build_run_result(
     duration_ms: int,
     targets: list[TargetResult],
     transcript: str,
+    project_uid: str = "",
 ) -> RunResult:
     passed = sum(1 for target in targets if target.ok)
     failed = len(targets) - passed
@@ -134,6 +139,7 @@ def build_run_result(
         workspace_path=workspace_path,
         project_root=_normalize_path(project_root),
         project_name=project_name,
+        project_uid=project_uid,
         started_at=started_at,
         finished_at=finished_at,
         duration_ms=duration_ms,

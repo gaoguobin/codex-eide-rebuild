@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 
 from .eide_model import require_yaml_module
@@ -13,6 +14,8 @@ from .platform import current_platform, normalize_path
 
 UNIFY_BUILDER_CHECK_TIMEOUT_SECONDS = 30
 DOTNET_RUNTIMES_TIMEOUT_SECONDS = 10
+EIDE_MCP_DEFAULT_PORT = 8940
+EIDE_MCP_HEALTH_TIMEOUT_SECONDS = 0.5
 
 
 class ToolchainMismatchError(FileNotFoundError):
@@ -471,6 +474,50 @@ def check_pyyaml_dependency() -> dict[str, object]:
     }
 
 
+def check_eide_mcp_health(port: int | None = None) -> dict[str, object]:
+    raw_port = os.environ.get("EIDE_REBUILD_MCP_PORT") or port or EIDE_MCP_DEFAULT_PORT
+    try:
+        port_value = int(raw_port)
+    except (TypeError, ValueError) as error:
+        return {
+            "ok": False,
+            "url": "",
+            "port": raw_port,
+            "message": f"Invalid EIDE MCP port: {raw_port}",
+            "errorType": _error_type(error),
+        }
+    url = f"http://127.0.0.1:{port_value}/health"
+    try:
+        with urllib.request.urlopen(url, timeout=EIDE_MCP_HEALTH_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as error:
+        return {
+            "ok": False,
+            "url": url,
+            "port": port_value,
+            "message": str(error),
+            "errorType": _error_type(error),
+        }
+
+    if not isinstance(payload, dict):
+        return {
+            "ok": False,
+            "url": url,
+            "port": port_value,
+            "message": "Unexpected EIDE MCP health response.",
+            "errorType": "UnexpectedResponse",
+        }
+
+    return {
+        "ok": bool(payload.get("ok")),
+        "url": url,
+        "port": port_value,
+        "message": "" if payload.get("ok") else "EIDE MCP health endpoint returned not ok.",
+        "errorType": "",
+        "response": payload,
+    }
+
+
 def run_doctor() -> dict[str, object]:
     tools: dict[str, str] = {}
     tool_checks: dict[str, dict[str, object]] = {}
@@ -478,6 +525,9 @@ def run_doctor() -> dict[str, object]:
     runtime_info: dict[str, object] = {"ok": True}
     dependencies = {
         "pyyaml": check_pyyaml_dependency(),
+    }
+    capabilities = {
+        "eideMcp": check_eide_mcp_health(),
     }
 
     checks = {
@@ -524,5 +574,6 @@ def run_doctor() -> dict[str, object]:
         "tools": tools,
         "toolChecks": tool_checks,
         "dependencies": dependencies,
+        "capabilities": capabilities,
         "runtime": runtime_info,
     }

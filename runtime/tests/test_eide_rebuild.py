@@ -99,6 +99,8 @@ class EideModelTests(unittest.TestCase):
             (eide_dir / "eide.yml").write_text(
                 '''
 name: demo
+miscInfo:
+  uid: demo-uid
 virtualFolder: {name: <virtual_root>, files: [], folders: []}
 targets:
   Debug: {toolchain: GCC, toolchainConfigMap: {GCC: {options: {}, cpuType: Cortex-M33, scatterFilePath: linker.ld}}}
@@ -110,6 +112,7 @@ targets:
             model = eide_rebuild.load_eide_model(project_dir / ".eide" / "eide.yml")
 
             self.assertEqual(model.project_name, "demo")
+            self.assertEqual(model.project_uid, "demo-uid")
             self.assertEqual(model.target_names, ["Debug", "Release"])
 
 
@@ -437,6 +440,8 @@ options:
             (eide_dir / "eide.yml").write_text(
                 '''
 name: demo
+miscInfo:
+  uid: demo-flow-uid
 virtualFolder: {name: <virtual_root>, files: [], folders: []}
 targets:
   Debug:
@@ -464,6 +469,8 @@ targets:
             (eide_dir / "eide.yml").write_text(
                 '''
 name: demo
+miscInfo:
+  uid: demo-flow-uid
 virtualFolder: {name: <virtual_root>, files: [], folders: []}
 targets:
   Debug:
@@ -649,8 +656,28 @@ class JsonProtocolTests(unittest.TestCase):
             stack_report_json_path="build/Debug/stack_report.json",
             stack_report_html_path="build/Debug/stack_report.html",
             source_stats={"totalFiles": 103, "jobs": 8},
+            failures=[],
+            diagnostics=[
+                {
+                    "kind": "compiler",
+                    "source": "unify-builder-stdout",
+                    "severity": "warning",
+                    "file": "src/main.c",
+                    "line": 12,
+                    "column": 3,
+                    "message": "unused variable 'x'",
+                }
+            ],
             memory=[{"name": "FLASH", "used": 139076, "total": 184320, "percent": 75.45, "unit": "B"}],
-            artifacts=[{"path": "build/Debug/app.bin", "kind": "bin", "size": 139104}],
+            artifacts=[
+                {
+                    "path": "build/Debug/app.bin",
+                    "fileName": "app.bin",
+                    "kind": "bin",
+                    "size": 139104,
+                    "sha256": "ABC",
+                }
+            ],
             transcript="target transcript",
             steps=[step],
         )
@@ -659,6 +686,7 @@ class JsonProtocolTests(unittest.TestCase):
             workspace_path="C:/work/demo.code-workspace",
             project_root=Path("C:/work/demo"),
             project_name="demo",
+            project_uid="demo-uid",
             platform_name="windows",
             target_names=["Debug"],
             started_at="2026-04-16T08:13:04Z",
@@ -672,10 +700,15 @@ class JsonProtocolTests(unittest.TestCase):
 
         self.assertEqual(payload["schemaVersion"], "1")
         self.assertTrue(payload["ok"])
+        self.assertEqual(payload["projectUid"], "demo-uid")
         self.assertEqual(payload["summary"], {"discovered": 1, "passed": 1, "failed": 0})
         self.assertEqual(payload["targets"][0]["builderParamsSummary"]["sourceCount"], 103)
+        self.assertEqual(payload["targets"][0]["diagnostics"][0]["severity"], "warning")
+        self.assertEqual(payload["targets"][0]["failures"], [])
         self.assertEqual(payload["targets"][0]["memory"][0]["name"], "FLASH")
         self.assertEqual(payload["targets"][0]["artifacts"][0]["kind"], "bin")
+        self.assertEqual(payload["targets"][0]["artifacts"][0]["fileName"], "app.bin")
+        self.assertEqual(payload["targets"][0]["artifacts"][0]["sha256"], "ABC")
         self.assertEqual(payload["targets"][0]["steps"][0]["kind"], "unify-builder")
         self.assertEqual(payload["targets"][0]["steps"][0]["command"], ["dotnet", "unify_builder.dll"])
 
@@ -1099,6 +1132,41 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertTrue(json.loads(stdout_buffer.getvalue())["ok"])
 
+    def test_check_eide_mcp_health_reports_proxy_response(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return None
+
+            def read(self) -> bytes:
+                return b'{"ok": true, "httpPort": 8940, "ipcPort": 8941, "pid": 1234}'
+
+        with mock.patch("eide_rebuild.tools.urllib.request.urlopen", return_value=FakeResponse()) as urlopen_mock:
+            result = eide_rebuild.check_eide_mcp_health()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["port"], 8940)
+        self.assertEqual(result["response"]["ipcPort"], 8941)
+        self.assertEqual(urlopen_mock.call_args.args[0], "http://127.0.0.1:8940/health")
+
+    def test_check_eide_mcp_health_reports_unavailable_without_failing_doctor(self) -> None:
+        with mock.patch("eide_rebuild.tools.urllib.request.urlopen", side_effect=OSError("connection refused")):
+            result = eide_rebuild.check_eide_mcp_health(port=8999)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["port"], 8999)
+        self.assertIn("connection refused", result["message"])
+
+    def test_check_eide_mcp_health_reports_invalid_port(self) -> None:
+        with mock.patch.dict(os.environ, {"EIDE_REBUILD_MCP_PORT": "not-a-port"}, clear=False):
+            result = eide_rebuild.check_eide_mcp_health()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["port"], "not-a-port")
+        self.assertIn("Invalid EIDE MCP port", result["message"])
+
 
 class ExecutorTests(unittest.TestCase):
     def test_records_step_stdout_stderr_command_cwd_and_transcript(self) -> None:
@@ -1175,6 +1243,7 @@ class ExecutorTests(unittest.TestCase):
                 "-p",
                 "D:/repo/build/Debug/builder.params",
                 "--rebuild",
+                "--no-color",
             ],
         )
 
@@ -1259,7 +1328,12 @@ targets:
             self.assertEqual(target.compiler_log, "[ DONE ] build successfully !\n")
             self.assertTrue(target.stack_report_json_path.endswith("/build/Debug/stack_report.json"))
             self.assertTrue(target.stack_report_html_path.endswith("/build/Debug/stack_report.html"))
+            self.assertEqual(target.artifacts[0]["fileName"], "app.bin")
             self.assertEqual(target.artifacts[0]["kind"], "bin")
+            self.assertEqual(
+                target.artifacts[0]["sha256"],
+                "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
+            )
             self.assertEqual(target.source_stats["cFiles"], 99)
             self.assertEqual(target.source_stats["jobs"], 8)
             self.assertEqual(target.memory[0]["name"], "RAM")
@@ -1331,6 +1405,132 @@ targets:
             self.assertEqual(target.stack_report_json_path, (build_dir / "stack_report.json").as_posix())
             self.assertEqual(target.stack_report_html_path, (build_dir / "stack_report.html").as_posix())
             self.assertEqual(target.artifacts[0]["path"], (build_dir / "app.bin").as_posix())
+            self.assertEqual(target.artifacts[0]["fileName"], "app.bin")
+
+    def test_rebuild_target_extracts_compiler_diagnostics_from_failed_build(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            eide_dir = project_dir / ".eide"
+            eide_dir.mkdir()
+            (project_dir / "linker.ld").write_text("MEMORY {}\n", encoding="utf-8")
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M33
+        scatterFilePath: linker.ld
+        options:
+          global: {}
+          linker: { output-format: elf }
+''',
+                encoding="utf-8",
+            )
+            step = eide_rebuild.StepResult(
+                kind="unify-builder",
+                name="build Debug",
+                ok=False,
+                exit_code=1,
+                error_code="STEP_FAILED",
+                message="build Debug failed with exit code 1.",
+                started_at="2026-04-16T08:13:04Z",
+                finished_at="2026-04-16T08:13:05Z",
+                duration_ms=1000,
+                stdout="APP/Sources/foo.c:12:3: error: expected ';' before '}' token\n",
+                stderr="APP/Sources/foo.c:13: warning: unused variable 'x'\n",
+                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params", "--rebuild"],
+                cwd=project_dir.as_posix(),
+            )
+
+            with mock.patch("eide_rebuild.executor.run_step", return_value=step):
+                target = eide_rebuild.rebuild_target(
+                    project_root=project_dir,
+                    project_name="demo",
+                    target_name="Debug",
+                    target_index=1,
+                    target_total=1,
+                    dotnet_path="C:/dotnet/dotnet.exe",
+                    unify_builder_path="C:/EIDE/unify_builder.dll",
+                    eide_tools_dir="C:/EIDE",
+                    toolchain_root="C:/gcc-arm",
+                )
+
+            self.assertFalse(target.ok)
+            self.assertEqual(target.error_code, "UNIFY_BUILDER_FAILED")
+            self.assertEqual(target.failures[0]["kind"], "unify-builder")
+            self.assertEqual(target.failures[0]["errorCode"], "UNIFY_BUILDER_FAILED")
+            self.assertEqual(target.diagnostics[0]["severity"], "error")
+            self.assertEqual(target.diagnostics[0]["file"], "APP/Sources/foo.c")
+            self.assertEqual(target.diagnostics[0]["line"], 12)
+            self.assertEqual(target.diagnostics[0]["column"], 3)
+            self.assertEqual(target.diagnostics[1]["severity"], "warning")
+            self.assertIsNone(target.diagnostics[1]["column"])
+
+    def test_rebuild_target_deduplicates_diagnostics_across_logs(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            eide_dir = project_dir / ".eide"
+            build_dir = project_dir / "build" / "Debug"
+            eide_dir.mkdir()
+            build_dir.mkdir(parents=True)
+            (project_dir / "linker.ld").write_text("MEMORY {}\n", encoding="utf-8")
+            warning_line = "APP/Sources/foo.c:13: warning: unused variable 'x'\n"
+            (build_dir / "compiler.log").write_text(warning_line, encoding="utf-8")
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M33
+        scatterFilePath: linker.ld
+        options:
+          global: {}
+          linker: { output-format: elf }
+''',
+                encoding="utf-8",
+            )
+            step = eide_rebuild.StepResult(
+                kind="unify-builder",
+                name="build Debug",
+                ok=True,
+                exit_code=0,
+                error_code="OK",
+                message="",
+                started_at="2026-04-16T08:13:04Z",
+                finished_at="2026-04-16T08:13:05Z",
+                duration_ms=1000,
+                stdout=warning_line,
+                stderr="",
+                command=["dotnet", "unify_builder.dll", "-p", "build/Debug/builder.params", "--rebuild"],
+                cwd=project_dir.as_posix(),
+            )
+
+            with mock.patch("eide_rebuild.executor.run_step", return_value=step):
+                target = eide_rebuild.rebuild_target(
+                    project_root=project_dir,
+                    project_name="demo",
+                    target_name="Debug",
+                    target_index=1,
+                    target_total=1,
+                    dotnet_path="C:/dotnet/dotnet.exe",
+                    unify_builder_path="C:/EIDE/unify_builder.dll",
+                    eide_tools_dir="C:/EIDE",
+                    toolchain_root="C:/gcc-arm",
+                )
+
+            self.assertTrue(target.ok)
+            self.assertEqual(len(target.diagnostics), 1)
+            self.assertEqual(target.diagnostics[0]["source"], "unify-builder-stdout")
 
     def test_rebuild_target_marks_missing_compiler_log(self) -> None:
         with make_temp_dir() as temp_dir:
@@ -1341,6 +1541,8 @@ targets:
             (eide_dir / "eide.yml").write_text(
                 '''
 name: demo
+miscInfo:
+  uid: demo-flow-uid
 virtualFolder: {name: <virtual_root>, files: [], folders: []}
 targets:
   Debug:
@@ -1388,6 +1590,7 @@ targets:
             self.assertFalse(target.ok)
             self.assertEqual(target.exit_code, 8)
             self.assertEqual(target.error_code, "COMPILER_LOG_MISSING")
+            self.assertEqual(target.failures[0]["kind"], "compiler-log")
 
     def test_rebuild_target_propagates_step_timeout(self) -> None:
         with make_temp_dir() as temp_dir:
@@ -1582,6 +1785,9 @@ class TargetHookTests(unittest.TestCase):
             self.assertEqual(target.exit_code, 4)
             self.assertEqual(target.error_code, "POST_BUILD_TASK_FAILED")
             self.assertEqual(target.message, "pack image failed inside unify_builder.")
+            self.assertEqual(target.failures[0]["kind"], "post-build-task")
+            self.assertEqual(target.failures[0]["name"], "pack image")
+            self.assertEqual(target.failures[0]["errorCode"], "POST_BUILD_TASK_FAILED")
             self.assertEqual([step.kind for step in target.steps], ["generate-builder-params", "unify-builder"])
 
 
@@ -1600,6 +1806,8 @@ class PackageExportsTests(unittest.TestCase):
             (eide_dir / "eide.yml").write_text(
                 '''
 name: demo
+miscInfo:
+  uid: demo-flow-uid
 virtualFolder: {name: <virtual_root>, files: [], folders: []}
 targets:
   Debug:
@@ -1648,7 +1856,9 @@ targets:
 
             self.assertEqual(exit_code, 0)
             rebuild_target.assert_called_once()
-            self.assertEqual(json.loads(stdout_buffer.getvalue())["summary"]["passed"], 1)
+            payload = json.loads(stdout_buffer.getvalue())
+            self.assertEqual(payload["summary"]["passed"], 1)
+            self.assertEqual(payload["projectUid"], "demo-flow-uid")
 
 
 class DirectBuilderFlowTests(unittest.TestCase):

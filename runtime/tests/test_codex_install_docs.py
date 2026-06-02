@@ -121,6 +121,12 @@ class CodexInstallDocsTests(unittest.TestCase):
         self.assertNotIn("Get-Command code", content)
         self.assertNotIn("VS Code CLI command `code` is required before installing", content)
 
+    def test_uninstall_does_not_require_vscode_cli_or_bridge_cleanup(self) -> None:
+        content = CODEX_UNINSTALL_DOC.read_text(encoding="utf-8")
+        self.assertNotIn("Get-Command code", content)
+        self.assertNotIn("code --uninstall-extension", content)
+        self.assertNotIn("cli-bridge", content.lower())
+
     def test_claude_code_subagent_has_required_frontmatter(self) -> None:
         content = CC_AGENT_DOC.read_text(encoding="utf-8")
         self.assertTrue(content.startswith("---\n"))

@@ -37,7 +37,10 @@ python scripts/eide_rebuild.py doctor
 
 - Treat the runner as the source of truth.
 - Read one complete JSON object from `stdout`.
+- First inspect `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, `targets[].ok`, `targets[].failures`, `targets[].diagnostics`, and `targets[].artifacts`.
+- Use `targets[].artifacts[].sha256` when reporting final firmware identity.
 - Keep `compilerLog`, `steps`, `artifacts`, and `transcript` intact.
+- Read `compilerLog`, `transcript`, and `steps[].stdout/stderr` only when the user asks for details or when the structured `failures` / `diagnostics` fields are not enough.
 - Use exit code `0` for success, `6` for build failure, and the other exit codes for environment or tool errors.
 
 ## Subagent guidance

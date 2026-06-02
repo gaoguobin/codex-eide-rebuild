@@ -18,7 +18,7 @@ The project is designed for real workspace validation. Agents can run `doctor`, 
 
 | Capability | What it means |
 | --- | --- |
-| Agent-ready JSON | Returns one complete JSON result with `ok`, `errorCode`, target summaries, logs, steps, artifacts, and transcript. |
+| Agent-ready JSON | Returns one complete JSON result with `ok`, `errorCode`, target summaries, structured failures, diagnostics, artifact hashes, logs, steps, and transcript. |
 | Fresh build parameters | Generates `builder.params` from `.eide/eide.yml`, `.eide/env.ini`, `.eide/files.options.yml`, and workspace GCC settings before each rebuild. |
 | EIDE rebuild semantics | Runs `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params> --rebuild`. |
 | Tool discovery | Finds EIDE extension tools, model files, `unify_builder`, `dotnet`, and the GCC root configured by the workspace. |
@@ -131,7 +131,9 @@ Expected agent behavior:
 - Treat `exitCode=0` as success.
 - Treat `exitCode=6` as build failure.
 - Use other non-zero exit codes for setup, configuration, runtime, or timeout failures.
-- Preserve `compilerLog`, `steps`, `artifacts`, and `transcript` for analysis.
+- Inspect `targets[].failures`, `targets[].diagnostics`, and `targets[].artifacts` first.
+- Use `targets[].artifacts[].sha256` when reporting final firmware identity.
+- Preserve `compilerLog`, `steps`, `artifacts`, and `transcript` for deeper analysis.
 
 ## Output Protocol
 
@@ -148,11 +150,15 @@ Expected agent behavior:
       "ok": true,
       "builderParamsPath": "C:/work/demo/build/Debug/builder.params",
       "compilerLogPath": "C:/work/demo/build/Debug/compiler.log",
+      "failures": [],
+      "diagnostics": [],
       "artifacts": [
         {
           "path": "C:/work/demo/build/Debug/app.bin",
+          "fileName": "app.bin",
           "kind": "bin",
-          "size": 139104
+          "size": 139104,
+          "sha256": "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"
         }
       ]
     }

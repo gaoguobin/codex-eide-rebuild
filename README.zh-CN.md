@@ -16,7 +16,7 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 
 | 能力 | 含义 |
 | --- | --- |
-| Agent-ready JSON | 输出包含 `ok`、`errorCode`、target summary、日志、步骤、产物和 transcript 的完整 JSON。 |
+| Agent-ready JSON | 输出包含 `ok`、`errorCode`、target summary、结构化 failures、diagnostics、产物 hash、日志、步骤和 transcript 的完整 JSON。 |
 | 新鲜 build parameters | 每次 rebuild 前读取 `.eide/eide.yml`、`.eide/env.ini`、`.eide/files.options.yml` 和 workspace GCC 配置生成 `builder.params`。 |
 | EIDE rebuild 语义 | 调用 `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params> --rebuild`。 |
 | 工具自动发现 | 自动发现 EIDE extension tools、model files、`unify_builder`、`dotnet` 和 workspace 配置的 GCC root。 |
@@ -129,7 +129,9 @@ Agent 应按下面规则处理结果：
 - `exitCode=0` 表示成功。
 - `exitCode=6` 表示编译失败。
 - 其它非零 exit code 表示环境、配置、runtime 或超时问题。
-- 保留 `compilerLog`、`steps`、`artifacts`、`transcript` 供后续分析。
+- 优先查看 `targets[].failures`、`targets[].diagnostics` 和 `targets[].artifacts`。
+- 汇报最终固件身份时使用 `targets[].artifacts[].sha256`。
+- 保留 `compilerLog`、`steps`、`artifacts`、`transcript` 供进一步分析。
 
 ## 输出协议
 
@@ -146,11 +148,15 @@ Agent 应按下面规则处理结果：
       "ok": true,
       "builderParamsPath": "C:/work/demo/build/Debug/builder.params",
       "compilerLogPath": "C:/work/demo/build/Debug/compiler.log",
+      "failures": [],
+      "diagnostics": [],
       "artifacts": [
         {
           "path": "C:/work/demo/build/Debug/app.bin",
+          "fileName": "app.bin",
           "kind": "bin",
-          "size": 139104
+          "size": 139104,
+          "sha256": "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"
         }
       ]
     }

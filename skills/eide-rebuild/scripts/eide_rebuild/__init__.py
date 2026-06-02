@@ -21,6 +21,7 @@ from .result_model import (
 )
 from .tools import (
     build_process_env,
+    check_eide_mcp_health,
     check_unify_builder_runtime,
     find_dotnet,
     find_eide_extension_dir,
@@ -50,6 +51,7 @@ __all__ = [
     "build_run_result",
     "build_unify_builder_command",
     "build_process_env",
+    "check_eide_mcp_health",
     "check_unify_builder_runtime",
     "collect_output_files",
     "current_platform",
@@ -153,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             duration_ms=elapsed_ms(started_mark),
             targets=target_results,
             transcript="\n".join(transcript_parts),
+            project_uid=model.project_uid,
         )
         write_run_result(project_input.project_root / "build" / "rebuild_result.json", run_result)
         sys.stdout.write(render_json_result(run_result))

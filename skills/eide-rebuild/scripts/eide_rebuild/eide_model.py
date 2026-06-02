@@ -8,6 +8,7 @@ from typing import Any
 @dataclass
 class EideModel:
     project_name: str
+    project_uid: str
     target_names: list[str]
     payload: dict[str, Any]
 
@@ -25,4 +26,11 @@ def load_eide_model(eide_yml_path: Path) -> EideModel:
     with eide_yml_path.open("r", encoding="utf-8") as stream:
         payload = yaml_module.safe_load(stream) or {}
     targets = list((payload.get("targets") or {}).keys())
-    return EideModel(project_name=str(payload.get("name", "")), target_names=targets, payload=payload)
+    misc_info = payload.get("miscInfo") or {}
+    project_uid = str(misc_info.get("uid") or "") if isinstance(misc_info, dict) else ""
+    return EideModel(
+        project_name=str(payload.get("name", "")),
+        project_uid=project_uid,
+        target_names=targets,
+        payload=payload,
+    )
