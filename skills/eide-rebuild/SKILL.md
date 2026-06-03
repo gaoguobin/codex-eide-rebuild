@@ -46,7 +46,8 @@ python scripts/eide_rebuild.py doctor
 
 ## Subagent guidance
 
-- Prefer a worker subagent when the host supports delegation and policy allows it; fall back to direct execution otherwise.
+- Prefer the `eide-rebuild` custom agent when the user explicitly asks for subagent/delegated rebuild work and the host supports delegation.
+- Otherwise prefer a generic worker subagent when the host supports delegation and policy allows it; fall back to direct execution when no subagent is available.
 - The worker should run the same Python runner with `--stdout summary`.
 - The worker should return the compact summary stdout, not paste the full result JSON.
 - The main agent should keep `resultPath` available for follow-up analysis.

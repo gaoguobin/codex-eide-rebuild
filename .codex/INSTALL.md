@@ -14,6 +14,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/c
 
 - Git repo: `%USERPROFILE%\.codex\codex-eide-rebuild`
 - Skill namespace junction: `%USERPROFILE%\.agents\skills\codex-eide-rebuild -> %USERPROFILE%\.codex\codex-eide-rebuild\skills`
+- Codex custom agent template: `%USERPROFILE%\.codex\agents\eide-rebuild.toml`
 
 ## Install steps
 
@@ -23,6 +24,8 @@ Run this PowerShell block exactly:
 $repoRoot = Join-Path $HOME '.codex\codex-eide-rebuild'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $skillNamespace = Join-Path $skillsRoot 'codex-eide-rebuild'
+$agentsRoot = Join-Path $HOME '.codex\agents'
+$agentTemplate = Join-Path $agentsRoot 'eide-rebuild.toml'
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'codex-eide-rebuild currently supports Windows only.'
@@ -44,10 +47,16 @@ if (Test-Path $skillNamespace) {
     throw 'The skill namespace junction already exists. Remove it or follow UNINSTALL.md before reinstalling.'
 }
 
+if (Test-Path $agentTemplate) {
+    throw 'The Codex custom agent template already exists. Follow UPDATE.md instead, or remove it before reinstalling.'
+}
+
 New-Item -ItemType Directory -Force -Path $skillsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $agentsRoot | Out-Null
 git clone https://github.com/gaoguobin/codex-eide-rebuild.git $repoRoot
 python -m pip install --user PyYAML
 cmd /d /c "mklink /J `"$skillNamespace`" `"$repoRoot\skills`""
+Copy-Item -LiteralPath "$repoRoot\integrations\codex\agents\eide-rebuild.toml" -Destination $agentTemplate -Force
 ```
 
 ## After install
@@ -59,13 +68,14 @@ python "$repoRoot\skills\eide-rebuild\scripts\eide_rebuild.py" doctor
 ```
 
 Report the JSON result in the reply.
-When the JSON contains `"ok": true`, tell the user to restart Codex so it rescans `~/.agents/skills`.
+When the JSON contains `"ok": true`, tell the user to restart Codex so it rescans `~/.agents/skills` and `~/.codex/agents`.
 
 Then use natural language or an explicit path:
 
 - `你自己编译验证下对不对`
 - `帮我编译确认一下`
 - `EIDE rebuild D:\path\project.code-workspace`
+- `用 eide-rebuild 子代理 rebuild D:\path\project.code-workspace`
 
 ## Existing install
 

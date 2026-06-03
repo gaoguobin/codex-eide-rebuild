@@ -21,7 +21,7 @@ BANNED_LEGACY_BRIDGE_SNIPPETS = [
     "named " + "pipe",
     "registration " + "file",
 ]
-TEXT_SUFFIXES = {".md", ".py", ".js", ".json", ".ps1", ".yaml", ".yml", ".txt"}
+TEXT_SUFFIXES = {".md", ".py", ".js", ".json", ".ps1", ".toml", ".yaml", ".yml", ".txt"}
 SKIP_DIR_NAMES = {".git", ".tmp", ".claude", "__pycache__"}
 
 

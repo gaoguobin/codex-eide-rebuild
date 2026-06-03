@@ -14,6 +14,7 @@ CC_INSTALL_DOC = REPO_ROOT / "integrations" / "claude-code" / "INSTALL.md"
 CC_UPDATE_DOC = REPO_ROOT / "integrations" / "claude-code" / "UPDATE.md"
 CC_UNINSTALL_DOC = REPO_ROOT / "integrations" / "claude-code" / "UNINSTALL.md"
 CC_AGENT_DOC = REPO_ROOT / "integrations" / "claude-code" / "agents" / "eide-rebuild.md"
+CODEX_AGENT_DOC = REPO_ROOT / "integrations" / "codex" / "agents" / "eide-rebuild.toml"
 
 _BASE = "https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main"
 CODEX_INSTALL_URL = f"{_BASE}/.codex/INSTALL.md"
@@ -29,6 +30,7 @@ class CodexInstallDocsTests(unittest.TestCase):
         self.assertTrue(CODEX_INSTALL_DOC.exists())
         self.assertTrue(CODEX_UPDATE_DOC.exists())
         self.assertTrue(CODEX_UNINSTALL_DOC.exists())
+        self.assertTrue(CODEX_AGENT_DOC.exists())
 
     def test_claude_code_lifecycle_docs_exist(self) -> None:
         self.assertTrue(CC_INSTALL_DOC.exists())
@@ -121,6 +123,18 @@ class CodexInstallDocsTests(unittest.TestCase):
         self.assertNotIn("Get-Command code", content)
         self.assertNotIn("VS Code CLI command `code` is required before installing", content)
 
+    def test_codex_lifecycle_docs_manage_custom_agent_template(self) -> None:
+        install = CODEX_INSTALL_DOC.read_text(encoding="utf-8")
+        update = CODEX_UPDATE_DOC.read_text(encoding="utf-8")
+        uninstall = CODEX_UNINSTALL_DOC.read_text(encoding="utf-8")
+        for content in (install, update):
+            with self.subTest(doc="install/update"):
+                self.assertIn(".codex\\agents", content)
+                self.assertIn("integrations\\codex\\agents\\eide-rebuild.toml", content)
+                self.assertIn("Copy-Item", content)
+        self.assertIn(".codex\\agents\\eide-rebuild.toml", uninstall)
+        self.assertIn("custom agent", uninstall)
+
     def test_uninstall_does_not_require_vscode_cli_or_bridge_cleanup(self) -> None:
         content = CODEX_UNINSTALL_DOC.read_text(encoding="utf-8")
         self.assertNotIn("Get-Command code", content)
@@ -138,3 +152,11 @@ class CodexInstallDocsTests(unittest.TestCase):
         }
         self.assertIn("name", keys)
         self.assertIn("description", keys)
+
+    def test_codex_custom_agent_has_required_fields(self) -> None:
+        content = CODEX_AGENT_DOC.read_text(encoding="utf-8")
+        self.assertIn('name = "eide-rebuild"', content)
+        self.assertIn("description =", content)
+        self.assertIn("developer_instructions =", content)
+        self.assertIn("--stdout summary", content)
+        self.assertNotIn("hooks", content.lower())

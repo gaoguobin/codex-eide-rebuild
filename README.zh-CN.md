@@ -22,7 +22,7 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 | 工具自动发现 | 自动发现 EIDE extension tools、model files、`unify_builder`、`dotnet` 和 workspace 配置的 GCC root。 |
 | 环境诊断 | `doctor` 输出结构化 `toolChecks`、PyYAML 状态和 .NET runtime probing 结果。 |
 | 超时保护 | 编译步骤 60 秒超时后返回 `STEP_TIMEOUT`。 |
-| Subagent 适配 | 长日志 rebuild 可以交给 worker subagent，主 Agent 只处理 compact summary 和 `resultPath`。 |
+| Subagent 适配 | Codex 和 Claude Code 都可以把长日志 rebuild 交给 worker subagent，主 Agent 只处理 compact summary 和 `resultPath`。 |
 | 同步护栏 | CI 校验 shared runtime 和 skill bundle 内副本保持一致。 |
 
 ## 兼容性
@@ -32,7 +32,7 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 - VS Code 中已安装 Embedded IDE for VS Code (`cl.eide`)。
 - 本机存在与 EIDE `unify_builder` 兼容的 .NET runtime。
 - EIDE 工程包含 `.code-workspace` 和 `.eide/eide.yml`。
-- 当前仓库同时提供 Codex skill 安装入口和 Claude Code command/subagent 模板。
+- 当前仓库同时提供 Codex skill 安装入口、Codex custom agent 模板和 Claude Code command/subagent 模板。
 
 ## Agent Skill 和可发现性
 
@@ -44,6 +44,9 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 - 触发表达：`帮我编译确认一下`、`先 rebuild 看结果`、`EIDE rebuild C:\work\demo\project.code-workspace`、`/eide-rebuild C:\work\demo\project.code-workspace`。
 - Runner 入口：`skills/eide-rebuild/scripts/eide_rebuild.py`
 - 环境检查：`python skills/eide-rebuild/scripts/eide_rebuild.py doctor`
+- Codex custom agent 模板：`integrations/codex/agents/eide-rebuild.toml`（安装到 `~/.codex/agents/eide-rebuild.toml`）
+
+Codex 的 subagent 机制按官方设计需要用户显式要求。长日志或多工程 rebuild 时，建议直接说：`用 eide-rebuild 子代理 rebuild C:\work\demo\project.code-workspace`。如果当前 Codex surface 不能 spawn subagent，同一个 runner 仍可直接执行并返回 compact JSON stdout。
 
 索引公开 GitHub 仓库 Agent Skills 的工具，包括 SkillsMP-style GitHub indexers，可以通过上面的路径发现这个 skill。仓库同时提供明确的 skill metadata、稳定 skill 路径和 `.codex-plugin/plugin.json` discovery metadata。
 
@@ -65,9 +68,9 @@ Codex plugin 文档定义 `.codex-plugin/plugin.json` 为 plugin manifest，`ski
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
 ```
 
-安装流程会把仓库 clone 到 `~/.codex/codex-eide-rebuild`，安装 PyYAML，把 skill namespace 链接到 `~/.agents/skills`，并运行 `doctor`。
+安装流程会把仓库 clone 到 `~/.codex/codex-eide-rebuild`，安装 PyYAML，把 skill namespace 链接到 `~/.agents/skills`，安装 Codex custom agent 模板，并运行 `doctor`。
 
-`doctor.ok=true` 后重启 Codex，让它重新扫描 skill。
+`doctor.ok=true` 后重启 Codex，让它重新扫描 skill 和 custom agent。
 
 ### Claude Code
 
@@ -187,6 +190,7 @@ python -m unittest discover -s .\runtime\tests -p "test_*.py"
 | --- | --- |
 | Codex 安装仓库 | `~/.codex/codex-eide-rebuild` |
 | Codex skill namespace | `~/.agents/skills/codex-eide-rebuild` |
+| Codex custom agent 模板 | `~/.codex/agents/eide-rebuild.toml` |
 | Skill 文件 | `skills/eide-rebuild/SKILL.md` |
 | Runner 脚本 | `skills/eide-rebuild/scripts/eide_rebuild.py` |
 | Rebuild 结果 | `<project>/build/rebuild_result.json` |
@@ -213,6 +217,7 @@ runtime/
 skills/
   eide-rebuild/      Agent Skill 和 bundled runner copy
 integrations/
+  codex/            Codex custom agent 模板
   claude-code/       Claude Code 安装文档、command 和 subagent 模板
 scripts/
   sync_skill_runtime.py

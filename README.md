@@ -24,7 +24,7 @@ The project is designed for real workspace validation. Agents can run `doctor`, 
 | Tool discovery | Finds EIDE extension tools, model files, `unify_builder`, `dotnet`, and the GCC root configured by the workspace. |
 | Setup diagnostics | `doctor` reports structured `toolChecks`, PyYAML status, and .NET runtime probing results. |
 | Timeout guard | Long-running build steps return `STEP_TIMEOUT` after 60 seconds. |
-| Multi-agent fit | The skill can delegate long rebuilds to a worker subagent while the main agent keeps only the compact summary and `resultPath`. |
+| Multi-agent fit | Codex and Claude Code can delegate long rebuilds to a worker subagent while the main agent keeps only the compact summary and `resultPath`. |
 | Runtime sync guard | CI verifies the shared runner and bundled skill copy stay synchronized. |
 
 ## Compatibility
@@ -34,7 +34,7 @@ The project is designed for real workspace validation. Agents can run `doctor`, 
 - Embedded IDE for VS Code (`cl.eide`) installed in VS Code.
 - .NET runtime compatible with the installed EIDE `unify_builder`.
 - EIDE workspaces with `.code-workspace` and `.eide/eide.yml`.
-- Codex skill installation and Claude Code command/subagent templates are both included.
+- Codex skill installation, a Codex custom agent template, and Claude Code command/subagent templates are included.
 
 ## Agent Skill and Discovery
 
@@ -46,6 +46,9 @@ This repository includes one Agent Skill:
 - Trigger examples: `帮我编译确认一下`, `先 rebuild 看结果`, `EIDE rebuild C:\work\demo\project.code-workspace`, `/eide-rebuild C:\work\demo\project.code-workspace`.
 - Runner entry point: `skills/eide-rebuild/scripts/eide_rebuild.py`
 - Environment check: `python skills/eide-rebuild/scripts/eide_rebuild.py doctor`
+- Codex custom agent template: `integrations/codex/agents/eide-rebuild.toml` (installed to `~/.codex/agents/eide-rebuild.toml`)
+
+Codex subagents are explicit by design. For long or multi-project rebuilds, ask Codex directly: `用 eide-rebuild 子代理 rebuild C:\work\demo\project.code-workspace`. If the current Codex surface cannot spawn subagents, the same runner still works directly with compact JSON stdout.
 
 Tools that index public GitHub repositories for Agent Skills, including SkillsMP-style GitHub indexers, can discover the skill at the path above. This repository uses explicit skill metadata, a stable skill path, and `.codex-plugin/plugin.json` discovery metadata to make the bundled skill easy to identify.
 
@@ -67,9 +70,9 @@ Paste this into Codex:
 Fetch and follow instructions from https://raw.githubusercontent.com/gaoguobin/codex-eide-rebuild/main/.codex/INSTALL.md
 ```
 
-The install flow clones the repository into `~/.codex/codex-eide-rebuild`, installs PyYAML, links the skill namespace into `~/.agents/skills`, and runs `doctor`.
+The install flow clones the repository into `~/.codex/codex-eide-rebuild`, installs PyYAML, links the skill namespace into `~/.agents/skills`, installs the Codex custom agent template, and runs `doctor`.
 
-After `doctor.ok=true`, restart Codex so it rescans installed skills.
+After `doctor.ok=true`, restart Codex so it rescans installed skills and custom agents.
 
 ### Claude Code
 
@@ -189,6 +192,7 @@ Default paths:
 | --- | --- |
 | Codex install repo | `~/.codex/codex-eide-rebuild` |
 | Codex skill namespace | `~/.agents/skills/codex-eide-rebuild` |
+| Codex custom agent template | `~/.codex/agents/eide-rebuild.toml` |
 | Skill file | `skills/eide-rebuild/SKILL.md` |
 | Runner script | `skills/eide-rebuild/scripts/eide_rebuild.py` |
 | Rebuild result | `<project>/build/rebuild_result.json` |
@@ -215,6 +219,7 @@ runtime/
 skills/
   eide-rebuild/      Agent Skill and bundled runner copy
 integrations/
+  codex/            Codex custom agent template
   claude-code/       Claude Code install docs, command, and subagent templates
 scripts/
   sync_skill_runtime.py

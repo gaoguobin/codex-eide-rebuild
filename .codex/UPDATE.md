@@ -10,6 +10,8 @@ Run this PowerShell block exactly:
 $repoRoot = Join-Path $HOME '.codex\codex-eide-rebuild'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $skillNamespace = Join-Path $skillsRoot 'codex-eide-rebuild'
+$agentsRoot = Join-Path $HOME '.codex\agents'
+$agentTemplate = Join-Path $agentsRoot 'eide-rebuild.toml'
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'codex-eide-rebuild currently supports Windows only.'
@@ -34,10 +36,12 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 git -C $repoRoot fetch --tags origin
 git -C $repoRoot switch main
 git -C $repoRoot pull --ff-only
+New-Item -ItemType Directory -Force -Path $agentsRoot | Out-Null
+Copy-Item -LiteralPath "$repoRoot\integrations\codex\agents\eide-rebuild.toml" -Destination $agentTemplate -Force
 python -m pip install --user PyYAML
 python "$repoRoot\skills\eide-rebuild\scripts\eide_rebuild.py" doctor
 ```
 
 ## After update
 
-Restart Codex so it rescans the skill namespace and picks up the updated docs.
+Restart Codex so it rescans the skill namespace, custom agents, and updated docs.

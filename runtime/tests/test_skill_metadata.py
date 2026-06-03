@@ -11,6 +11,7 @@ README_ZH = REPO_ROOT / "README.zh-CN.md"
 PLUGIN_MANIFEST = REPO_ROOT / ".codex-plugin" / "plugin.json"
 SKILL_FILE = REPO_ROOT / "skills" / "eide-rebuild" / "SKILL.md"
 OPENAI_YAML = REPO_ROOT / "skills" / "eide-rebuild" / "agents" / "openai.yaml"
+CODEX_AGENT_TEMPLATE = REPO_ROOT / "integrations" / "codex" / "agents" / "eide-rebuild.toml"
 
 
 def _skill_frontmatter() -> dict[str, str]:
@@ -30,6 +31,7 @@ class SkillMetadataTests(unittest.TestCase):
         self.assertTrue(SKILL_FILE.exists())
         self.assertTrue(OPENAI_YAML.exists())
         self.assertTrue(PLUGIN_MANIFEST.exists())
+        self.assertTrue(CODEX_AGENT_TEMPLATE.exists())
 
     def test_skill_frontmatter_is_search_friendly(self) -> None:
         frontmatter = _skill_frontmatter()
@@ -65,9 +67,11 @@ class SkillMetadataTests(unittest.TestCase):
         self.assertIn("Skill name: `eide-rebuild`", english)
         self.assertIn("Skill path: `skills/eide-rebuild/SKILL.md`", english)
         self.assertIn("SkillsMP-style GitHub indexers", english)
+        self.assertIn("Codex custom agent template", english)
         self.assertIn("Skill 名称：`eide-rebuild`", chinese)
         self.assertIn("Skill 路径：`skills/eide-rebuild/SKILL.md`", chinese)
         self.assertIn("SkillsMP-style GitHub indexers", chinese)
+        self.assertIn("Codex custom agent 模板", chinese)
 
     def test_readmes_keep_marketplace_claims_absent(self) -> None:
         for readme in (README_EN, README_ZH):

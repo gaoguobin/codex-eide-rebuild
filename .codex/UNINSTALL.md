@@ -14,12 +14,13 @@ Run this PowerShell block exactly:
 $repoRoot = Join-Path $HOME '.codex\codex-eide-rebuild'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $skillNamespace = Join-Path $skillsRoot 'codex-eide-rebuild'
+$agentTemplate = Join-Path $HOME '.codex\agents\eide-rebuild.toml'
 
 if ($env:OS -ne 'Windows_NT') {
     throw 'codex-eide-rebuild currently supports Windows only.'
 }
 
-foreach ($path in @($skillNamespace, $repoRoot)) {
+foreach ($path in @($skillNamespace, $agentTemplate, $repoRoot)) {
     if (Test-Path $path) {
         Remove-Item -LiteralPath $path -Recurse -Force
     }
@@ -28,6 +29,6 @@ foreach ($path in @($skillNamespace, $repoRoot)) {
 
 ## After uninstall
 
-Restart Codex so it drops the removed skill namespace from its next scan.
+Restart Codex so it drops the removed skill namespace and custom agent from its next scan.
 
 This uninstall keeps VS Code itself, `cl.eide`, Python, `.NET`, EIDE toolchains, and your project directories intact.
