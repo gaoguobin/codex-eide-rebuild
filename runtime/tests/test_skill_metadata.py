@@ -47,6 +47,14 @@ class SkillMetadataTests(unittest.TestCase):
         self.assertIn("帮我编译确认一下", content)
         self.assertIn("EIDE subagent rebuild", content)
 
+    def test_skill_execution_policy_defaults_to_direct_and_low_noise(self) -> None:
+        content = SKILL_FILE.read_text(encoding="utf-8")
+        self.assertIn("Single project, normal compile/rebuild request", content)
+        self.assertIn("Run the runner directly in the main agent", content)
+        self.assertIn("when the user explicitly asks for subagent/delegated rebuild work", content)
+        self.assertIn("Do not paste full logs or long artifact lists", content)
+        self.assertIn("artifact identity/provenance data", content)
+
     def test_plugin_manifest_points_to_bundled_skills(self) -> None:
         manifest = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(manifest["name"], "codex-eide-rebuild")

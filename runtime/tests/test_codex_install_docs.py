@@ -159,4 +159,13 @@ class CodexInstallDocsTests(unittest.TestCase):
         self.assertIn("description =", content)
         self.assertIn("developer_instructions =", content)
         self.assertIn("--stdout summary", content)
+        self.assertIn("identity/provenance", content)
         self.assertNotIn("hooks", content.lower())
+
+    def test_claude_command_defaults_to_direct_single_project_rebuild(self) -> None:
+        content = (
+            REPO_ROOT / "integrations" / "claude-code" / "commands" / "eide-rebuild.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Default to direct execution", content)
+        self.assertIn("Use the `eide-rebuild` subagent only when the user explicitly asks", content)
+        self.assertIn("Do not paste full logs or long artifact lists on success", content)
