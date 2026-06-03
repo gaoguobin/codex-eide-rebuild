@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/gaoguobin/codex-eide-rebuild/actions/workflows/ci.yml/badge.svg)](https://github.com/gaoguobin/codex-eide-rebuild/actions/workflows/ci.yml)
 
-Rebuild Embedded IDE for VS Code (EIDE) workspaces from Codex or Claude Code and return one complete structured JSON build result.
+Rebuild Embedded IDE for VS Code (EIDE) workspaces from Codex or Claude Code and return compact or complete structured JSON build results.
 
 `codex-eide-rebuild` packages an Agent Skill plus a Windows-first Python runner. The runner reads the current EIDE project model, generates fresh `builder.params`, invokes EIDE `unify_builder` through `dotnet`, and preserves compiler logs, artifacts, memory usage, stack reports, and setup diagnostics for the agent.
 
@@ -10,7 +10,7 @@ Rebuild Embedded IDE for VS Code (EIDE) workspaces from Codex or Claude Code and
 
 ## Why
 
-This project is for firmware and embedded teams that already build EIDE projects locally and want agents to run the same rebuild flow without relying on VS Code bridge registration. It keeps the agent-facing protocol simple: one command in, one JSON object out.
+This project is for firmware and embedded teams that already build EIDE projects locally and want agents to run the same rebuild flow without relying on VS Code bridge registration. It keeps the agent-facing protocol simple: one command in, one compact JSON summary out, with the complete JSON saved on disk.
 
 The project is designed for real workspace validation. Agents can run `doctor`, rebuild all EIDE targets, inspect failed build steps, and quote the exact compiler log path and artifact paths without scraping terminal output by hand.
 
@@ -18,13 +18,13 @@ The project is designed for real workspace validation. Agents can run `doctor`, 
 
 | Capability | What it means |
 | --- | --- |
-| Agent-ready JSON | Returns one complete JSON result with `ok`, `errorCode`, target summaries, structured failures, diagnostics, artifact hashes, logs, steps, and transcript. |
+| Agent-ready JSON | Returns a compact `agentSummary` for normal agent work and preserves one complete JSON result with logs, steps, and transcript at `build/rebuild_result.json`. |
 | Fresh build parameters | Generates `builder.params` from `.eide/eide.yml`, `.eide/env.ini`, `.eide/files.options.yml`, and workspace GCC settings before each rebuild. |
 | EIDE rebuild semantics | Runs `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params> --rebuild`. |
 | Tool discovery | Finds EIDE extension tools, model files, `unify_builder`, `dotnet`, and the GCC root configured by the workspace. |
 | Setup diagnostics | `doctor` reports structured `toolChecks`, PyYAML status, and .NET runtime probing results. |
 | Timeout guard | Long-running build steps return `STEP_TIMEOUT` after 60 seconds. |
-| Multi-agent fit | The skill can delegate long rebuilds to a worker subagent while the main agent keeps the parsed result. |
+| Multi-agent fit | The skill can delegate long rebuilds to a worker subagent while the main agent keeps only the compact summary and `resultPath`. |
 | Runtime sync guard | CI verifies the shared runner and bundled skill copy stay synchronized. |
 
 ## Compatibility
@@ -122,20 +122,22 @@ python skills/eide-rebuild/scripts/eide_rebuild.py doctor
 Run a rebuild against a workspace file or project directory:
 
 ```powershell
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
 ```
 
 Expected agent behavior:
 
-- Read one complete JSON object from `stdout`.
+- Read the compact JSON summary from `stdout`.
 - Treat `exitCode=0` as success.
 - Treat `exitCode=6` as build failure.
 - Use other non-zero exit codes for setup, configuration, runtime, or timeout failures.
 - Inspect `targets[].failures`, `targets[].diagnostics`, and `targets[].artifacts` first.
 - Use `targets[].artifacts[].sha256` when reporting final firmware identity.
-- Preserve `compilerLog`, `steps`, `artifacts`, and `transcript` for deeper analysis.
+- Use `resultPath` for the complete JSON when deeper `compilerLog`, `steps`, or `transcript` analysis is needed.
 
 ## Output Protocol
+
+Normal agent runs use compact stdout:
 
 ```json
 {
@@ -144,6 +146,8 @@ Expected agent behavior:
   "exitCode": 0,
   "errorCode": "OK",
   "mode": "rebuild-all",
+  "summary": { "discovered": 1, "passed": 1, "failed": 0 },
+  "resultPath": "C:/work/demo/build/rebuild_result.json",
   "targets": [
     {
       "name": "Debug",
@@ -166,13 +170,15 @@ Expected agent behavior:
 }
 ```
 
+The complete result is always written to `resultPath`. Omit `--stdout` or pass `--stdout full` only when the full JSON is explicitly needed on stdout.
+
 ## Common Commands
 
 Agents should use the runner as the source of truth:
 
 ```powershell
 python skills/eide-rebuild/scripts/eide_rebuild.py doctor
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
 python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"
 ```

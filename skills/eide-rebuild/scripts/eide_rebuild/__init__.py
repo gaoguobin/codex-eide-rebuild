@@ -14,8 +14,10 @@ from .result_model import (
     RunResult,
     StepResult,
     TargetResult,
+    build_agent_summary,
     build_error_result,
     build_run_result,
+    render_agent_summary_result,
     render_json_result,
     write_run_result,
 )
@@ -47,6 +49,7 @@ __all__ = [
     "RunResult",
     "StepResult",
     "TargetResult",
+    "build_agent_summary",
     "build_error_result",
     "build_run_result",
     "build_unify_builder_command",
@@ -67,6 +70,7 @@ __all__ = [
     "main",
     "normalize_path",
     "rebuild_target",
+    "render_agent_summary_result",
     "render_json_result",
     "resolve_project_input",
     "run_doctor",
@@ -75,6 +79,9 @@ __all__ = [
     "write_builder_params",
     "write_run_result",
 ]
+
+
+STDOUT_MODES = {"full", "summary"}
 
 
 def _resolve_project_input_or_raise(input_path: str) -> ProjectInput:
@@ -104,10 +111,46 @@ def _resolve_required_tools(workspace_path: str = "") -> tuple[str, str, str, st
         raise ExitError(3, str(error), getattr(error, "error_code", "TOOL_NOT_FOUND")) from error
 
 
+def _parse_rebuild_arguments(arguments: list[str]) -> tuple[str, str]:
+    if not arguments or arguments[0] != "rebuild":
+        raise ExitError(2, "Missing command or path.", "WORKSPACE_NOT_FOUND")
+
+    stdout_mode = "full"
+    paths: list[str] = []
+    index = 1
+    while index < len(arguments):
+        token = arguments[index]
+        if token == "--stdout":
+            index += 1
+            if index >= len(arguments):
+                raise ExitError(2, "Missing value for --stdout.", "INVALID_ARGUMENT")
+            stdout_mode = arguments[index]
+        elif token.startswith("--stdout="):
+            stdout_mode = token.split("=", 1)[1]
+        elif token.startswith("-"):
+            raise ExitError(2, f"Unknown option: {token}", "INVALID_ARGUMENT")
+        else:
+            paths.append(token)
+        index += 1
+
+    if stdout_mode not in STDOUT_MODES:
+        raise ExitError(2, f"Invalid --stdout value: {stdout_mode}. Expected full or summary.", "INVALID_ARGUMENT")
+    if len(paths) != 1:
+        raise ExitError(2, "Missing command or path.", "WORKSPACE_NOT_FOUND")
+    return paths[0], stdout_mode
+
+
+def _render_stdout_result(result: RunResult, stdout_mode: str) -> str:
+    if stdout_mode == "summary":
+        return render_agent_summary_result(result)
+    return render_json_result(result)
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     started_mark = time.perf_counter()
     started_at = utc_now()
+    stdout_mode = "full"
 
     try:
         if arguments and arguments[0] == "doctor":
@@ -115,10 +158,8 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(json.dumps(doctor_result, ensure_ascii=False, indent=2) + "\n")
             return int(doctor_result["exitCode"])
 
-        if len(arguments) < 2 or arguments[0] != "rebuild":
-            raise ExitError(2, "Missing command or path.", "WORKSPACE_NOT_FOUND")
-
-        project_input = _resolve_project_input_or_raise(arguments[1])
+        input_path, stdout_mode = _parse_rebuild_arguments(arguments)
+        project_input = _resolve_project_input_or_raise(input_path)
         model = load_eide_model(project_input.eide_yml_path)
         if not model.target_names:
             raise ExitError(6, "No targets found in .eide/eide.yml.", "TARGETS_NOT_FOUND")
@@ -144,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
                 transcript_parts.append(target_result.transcript)
 
         finished_at = utc_now()
+        result_path = project_input.project_root / "build" / "rebuild_result.json"
         run_result = build_run_result(
             workspace_path=project_input.workspace_path,
             project_root=project_input.project_root,
@@ -156,18 +198,19 @@ def main(argv: list[str] | None = None) -> int:
             targets=target_results,
             transcript="\n".join(transcript_parts),
             project_uid=model.project_uid,
+            result_path=result_path,
         )
-        write_run_result(project_input.project_root / "build" / "rebuild_result.json", run_result)
-        sys.stdout.write(render_json_result(run_result))
+        write_run_result(result_path, run_result)
+        sys.stdout.write(_render_stdout_result(run_result, stdout_mode))
         return run_result.exit_code
     except ExitError as error:
         finished_at = utc_now()
         run_result = build_error_result(error, started_at, finished_at, elapsed_ms(started_mark))
-        sys.stdout.write(render_json_result(run_result))
+        sys.stdout.write(_render_stdout_result(run_result, stdout_mode))
         return error.exit_code
     except Exception as error:
         finished_at = utc_now()
         wrapped_error = ExitError(7, str(error), "INTERNAL_ERROR")
         run_result = build_error_result(wrapped_error, started_at, finished_at, elapsed_ms(started_mark))
-        sys.stdout.write(render_json_result(run_result))
+        sys.stdout.write(_render_stdout_result(run_result, stdout_mode))
         return wrapped_error.exit_code

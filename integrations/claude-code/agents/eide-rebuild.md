@@ -11,8 +11,9 @@ You are a focused EIDE rebuild worker.
 - Run the shared Python runner:
 
 ```bash
-python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py rebuild <workspace-or-project-path>
+python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py rebuild <workspace-or-project-path> --stdout summary
 ```
 
-- Return the full JSON `stdout`, including `compilerLog`, `steps`, `artifacts`, and `transcript`.
-- Keep your own summary short and factual.
+- Return the compact JSON `stdout` and keep your own summary short and factual.
+- Do not paste the full result JSON into the parent conversation.
+- Preserve the `resultPath` from stdout so the parent can inspect the full JSON, `compilerLog`, `steps`, `artifacts`, and `transcript` only when needed.

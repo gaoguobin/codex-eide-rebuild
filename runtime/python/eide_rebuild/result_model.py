@@ -12,6 +12,7 @@ _KEY_MAP = {
     "schema_version": "schemaVersion",
     "exit_code": "exitCode",
     "error_code": "errorCode",
+    "agent_summary": "agentSummary",
     "workspace_path": "workspacePath",
     "project_root": "projectRoot",
     "project_name": "projectName",
@@ -91,6 +92,7 @@ class RunResult:
     finished_at: str = ""
     duration_ms: int = 0
     summary: dict[str, Any] = field(default_factory=dict)
+    agent_summary: dict[str, Any] = field(default_factory=dict)
     target_names: list[str] = field(default_factory=list)
     transcript: str = ""
     targets: list[TargetResult] = field(default_factory=list)
@@ -110,8 +112,69 @@ def render_json_result(result: RunResult) -> str:
     return json.dumps(_to_json_value(result), ensure_ascii=False, indent=2) + "\n"
 
 
+def render_agent_summary_result(result: RunResult) -> str:
+    summary = result.agent_summary or build_agent_summary(result)
+    return json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
+
+
 def _normalize_path(path_value: Path | str) -> str:
     return str(Path(path_value).resolve()).replace("\\", "/")
+
+
+def _limit_diagnostics(diagnostics: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    if limit < 0:
+        return list(diagnostics)
+    return list(diagnostics[:limit])
+
+
+def build_agent_summary(result: RunResult, result_path: str = "", diagnostic_limit: int = 20) -> dict[str, Any]:
+    targets = []
+    for target in result.targets:
+        diagnostics = _limit_diagnostics(target.diagnostics, diagnostic_limit)
+        targets.append(
+            {
+                "name": target.name,
+                "ok": target.ok,
+                "exitCode": target.exit_code,
+                "errorCode": target.error_code,
+                "message": target.message,
+                "durationMs": target.duration_ms,
+                "sourceStats": target.source_stats,
+                "memory": target.memory,
+                "failureCount": len(target.failures),
+                "failures": target.failures,
+                "diagnosticCount": len(target.diagnostics),
+                "diagnostics": diagnostics,
+                "diagnosticsTruncated": len(diagnostics) < len(target.diagnostics),
+                "artifactCount": len(target.artifacts),
+                "artifacts": target.artifacts,
+                "builderParamsPath": target.builder_params_path,
+                "compilerLogPath": target.compiler_log_path,
+                "stackReportJsonPath": target.stack_report_json_path,
+                "stackReportHtmlPath": target.stack_report_html_path,
+            }
+        )
+
+    return {
+        "schemaVersion": result.schema_version,
+        "ok": result.ok,
+        "exitCode": result.exit_code,
+        "errorCode": result.error_code,
+        "message": result.message,
+        "mode": result.mode,
+        "platform": result.platform,
+        "workspacePath": result.workspace_path,
+        "projectRoot": result.project_root,
+        "projectName": result.project_name,
+        "projectUid": result.project_uid,
+        "startedAt": result.started_at,
+        "finishedAt": result.finished_at,
+        "durationMs": result.duration_ms,
+        "summary": result.summary,
+        "targetNames": result.target_names,
+        "resultPath": result_path,
+        "targets": targets,
+    }
 
 
 def build_run_result(
@@ -126,10 +189,13 @@ def build_run_result(
     targets: list[TargetResult],
     transcript: str,
     project_uid: str = "",
+    result_path: Path | str | None = None,
 ) -> RunResult:
     passed = sum(1 for target in targets if target.ok)
     failed = len(targets) - passed
-    return RunResult(
+    normalized_project_root = _normalize_path(project_root)
+    normalized_result_path = _normalize_path(result_path or (Path(project_root) / "build" / "rebuild_result.json"))
+    result = RunResult(
         ok=failed == 0,
         exit_code=0 if failed == 0 else 6,
         error_code="OK" if failed == 0 else "BUILD_FAILED",
@@ -137,7 +203,7 @@ def build_run_result(
         mode="rebuild-all",
         platform=platform_name,
         workspace_path=workspace_path,
-        project_root=_normalize_path(project_root),
+        project_root=normalized_project_root,
         project_name=project_name,
         project_uid=project_uid,
         started_at=started_at,
@@ -148,12 +214,14 @@ def build_run_result(
         transcript=transcript,
         targets=targets,
     )
+    result.agent_summary = build_agent_summary(result, normalized_result_path)
+    return result
 
 
 def build_error_result(error: Exception, started_at: str, finished_at: str, duration_ms: int) -> RunResult:
     error_code = getattr(error, "error_code", "INTERNAL_ERROR")
     exit_code = getattr(error, "exit_code", 7)
-    return RunResult(
+    result = RunResult(
         ok=False,
         exit_code=exit_code,
         error_code=error_code,
@@ -165,6 +233,8 @@ def build_error_result(error: Exception, started_at: str, finished_at: str, dura
         duration_ms=duration_ms,
         summary={"discovered": 0, "passed": 0, "failed": 0},
     )
+    result.agent_summary = build_agent_summary(result)
+    return result
 
 
 def write_run_result(output_path: Path | str, result: RunResult) -> None:

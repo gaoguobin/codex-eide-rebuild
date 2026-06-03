@@ -1,6 +1,6 @@
 ---
 name: eide-rebuild
-description: EIDE rebuild and compile Agent Skill for Embedded IDE for VS Code workspaces. Runs a Python unify_builder runner and returns one complete JSON build result.
+description: EIDE rebuild and compile Agent Skill for Embedded IDE for VS Code workspaces. Runs a Python unify_builder runner and returns compact or full JSON build results.
 ---
 
 Use this skill when the user wants an EIDE project rebuilt from Codex.
@@ -24,7 +24,7 @@ Use this skill when the user wants an EIDE project rebuilt from Codex.
 Run:
 
 ```powershell
-python scripts/eide_rebuild.py rebuild <workspace-or-project-path>
+python scripts/eide_rebuild.py rebuild <workspace-or-project-path> --stdout summary
 ```
 
 Environment check:
@@ -36,15 +36,18 @@ python scripts/eide_rebuild.py doctor
 ## Result handling
 
 - Treat the runner as the source of truth.
-- Read one complete JSON object from `stdout`.
+- Prefer `--stdout summary` for normal agent work. It prints a compact JSON summary and still writes the complete result to `resultPath`.
+- Use `--stdout full` or omit `--stdout` only when the full JSON is explicitly needed on stdout.
 - First inspect `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, `targets[].ok`, `targets[].failures`, `targets[].diagnostics`, and `targets[].artifacts`.
 - Use `targets[].artifacts[].sha256` when reporting final firmware identity.
-- Keep `compilerLog`, `steps`, `artifacts`, and `transcript` intact.
-- Read `compilerLog`, `transcript`, and `steps[].stdout/stderr` only when the user asks for details or when the structured `failures` / `diagnostics` fields are not enough.
+- Keep the complete JSON available at `resultPath`; it includes `compilerLog`, `steps`, `artifacts`, and `transcript`.
+- Read `compilerLog`, `transcript`, and `steps[].stdout/stderr` from `resultPath` only when the user asks for details or when the structured `failures` / `diagnostics` fields are not enough.
 - Use exit code `0` for success, `6` for build failure, and the other exit codes for environment or tool errors.
 
 ## Subagent guidance
 
-- When the user explicitly asks for `subagent rebuild`, delegate the rebuild to a worker subagent.
-- The worker should run the same Python runner and return the full `stdout`.
-- The main agent should parse the JSON result and keep the full log fields available for analysis.
+- Prefer a worker subagent when the host supports delegation and policy allows it; fall back to direct execution otherwise.
+- The worker should run the same Python runner with `--stdout summary`.
+- The worker should return the compact summary stdout, not paste the full result JSON.
+- The main agent should keep `resultPath` available for follow-up analysis.
+- Do not run multiple rebuild workers against the same project/build directory concurrently.

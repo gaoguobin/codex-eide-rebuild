@@ -711,6 +711,71 @@ class JsonProtocolTests(unittest.TestCase):
         self.assertEqual(payload["targets"][0]["artifacts"][0]["sha256"], "ABC")
         self.assertEqual(payload["targets"][0]["steps"][0]["kind"], "unify-builder")
         self.assertEqual(payload["targets"][0]["steps"][0]["command"], ["dotnet", "unify_builder.dll"])
+        self.assertEqual(payload["agentSummary"]["targets"][0]["artifactCount"], 1)
+        self.assertEqual(payload["agentSummary"]["targets"][0]["diagnosticCount"], 1)
+        self.assertNotIn("compilerLog", payload["agentSummary"]["targets"][0])
+        self.assertNotIn("transcript", payload["agentSummary"]["targets"][0])
+        self.assertNotIn("steps", payload["agentSummary"]["targets"][0])
+
+    def test_render_agent_summary_result_omits_large_log_fields(self) -> None:
+        step = eide_rebuild.StepResult(
+            kind="unify-builder",
+            name="build Debug",
+            ok=True,
+            exit_code=0,
+            error_code="OK",
+            stdout="large stdout",
+            stderr="large stderr",
+            command=["dotnet", "unify_builder.dll"],
+        )
+        target = eide_rebuild.TargetResult(
+            name="Debug",
+            ok=True,
+            exit_code=0,
+            error_code="OK",
+            compiler_log="large compiler log",
+            transcript="large transcript",
+            diagnostics=[
+                {
+                    "kind": "compiler",
+                    "severity": "warning",
+                    "file": f"src/{index}.c",
+                    "line": index,
+                    "column": None,
+                    "message": "warning",
+                }
+                for index in range(25)
+            ],
+            artifacts=[{"fileName": "app.bin", "sha256": "ABC", "path": "build/Debug/app.bin", "kind": "bin", "size": 1}],
+            steps=[step],
+        )
+        result = eide_rebuild.build_run_result(
+            workspace_path="C:/work/demo.code-workspace",
+            project_root=Path("C:/work/demo"),
+            project_name="demo",
+            platform_name="windows",
+            target_names=["Debug"],
+            started_at="2026-04-16T08:13:04Z",
+            finished_at="2026-04-16T08:13:06Z",
+            duration_ms=2000,
+            targets=[target],
+            transcript="full transcript",
+            result_path="C:/work/demo/build/rebuild_result.json",
+        )
+
+        payload = json.loads(eide_rebuild.render_agent_summary_result(result))
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["resultPath"], str(Path("C:/work/demo/build/rebuild_result.json").resolve()).replace("\\", "/"))
+        self.assertEqual(payload["targets"][0]["diagnosticCount"], 25)
+        self.assertEqual(len(payload["targets"][0]["diagnostics"]), 20)
+        self.assertTrue(payload["targets"][0]["diagnosticsTruncated"])
+        self.assertNotIn("compilerLog", payload["targets"][0])
+        self.assertNotIn("transcript", payload["targets"][0])
+        self.assertNotIn("steps", payload["targets"][0])
+        self.assertNotIn("large compiler log", json.dumps(payload))
+        self.assertNotIn("large transcript", json.dumps(payload))
+        self.assertNotIn("large stdout", json.dumps(payload))
 
     def test_write_run_result_writes_same_json_payload(self) -> None:
         with make_temp_dir() as temp_dir:
@@ -1938,6 +2003,85 @@ targets:
             self.assertEqual(payload["summary"]["passed"], 2)
             self.assertEqual(payload["targets"][1]["name"], "Release")
             self.assertTrue((project_dir / "build" / "rebuild_result.json").exists())
+
+    def test_main_summary_stdout_keeps_full_json_file(self) -> None:
+        with make_temp_dir() as temp_dir:
+            project_dir = Path(temp_dir)
+            eide_dir = project_dir / ".eide"
+            eide_dir.mkdir()
+            (eide_dir / "eide.yml").write_text(
+                '''
+name: demo
+virtualFolder: {name: <virtual_root>, files: [], folders: []}
+targets:
+  Debug:
+    toolchain: GCC
+    cppPreprocessAttrs: { incList: [], libList: [], defineList: [] }
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M33
+        scatterFilePath: linker.ld
+        options: { global: {}, linker: {} }
+''',
+                encoding="utf-8",
+            )
+            target_result = eide_rebuild.TargetResult(
+                name="Debug",
+                index=1,
+                total=1,
+                ok=True,
+                exit_code=0,
+                error_code="OK",
+                message="",
+                builder_params_path=f"{project_dir.as_posix()}/build/Debug/builder.params",
+                compiler_log_path=f"{project_dir.as_posix()}/build/Debug/compiler.log",
+                compiler_log="large compiler log",
+                started_at="2026-04-16T08:13:04Z",
+                finished_at="2026-04-16T08:13:05Z",
+                duration_ms=1000,
+                transcript="large transcript",
+                source_stats={"jobs": 8, "totalFiles": 103},
+                artifacts=[{"fileName": "app.bin", "sha256": "ABC", "path": f"{project_dir.as_posix()}/build/Debug/app.bin", "kind": "bin", "size": 1}],
+                steps=[
+                    eide_rebuild.StepResult(
+                        kind="unify-builder",
+                        name="build Debug",
+                        ok=True,
+                        exit_code=0,
+                        error_code="OK",
+                        stdout="large stdout",
+                    )
+                ],
+            )
+            stdout_buffer = io.StringIO()
+
+            with (
+                mock.patch.object(eide_rebuild, "find_dotnet", return_value="C:/dotnet/dotnet.exe"),
+                mock.patch.object(eide_rebuild, "find_unify_builder", return_value="C:/EIDE/unify_builder.dll"),
+                mock.patch.object(eide_rebuild, "find_eide_tools_dir", return_value="C:/EIDE"),
+                mock.patch.object(eide_rebuild, "find_toolchain_root", return_value="C:/gcc-arm"),
+                mock.patch.object(
+                    eide_rebuild,
+                    "check_unify_builder_runtime",
+                    return_value={"ok": True, "requiredFramework": "Microsoft.NETCore.App", "requiredVersion": "6.0.0"},
+                ),
+                mock.patch.object(eide_rebuild, "rebuild_target", return_value=target_result),
+                redirect_stdout(stdout_buffer),
+            ):
+                exit_code = eide_rebuild.main(["rebuild", str(project_dir), "--stdout", "summary"])
+
+            stdout_payload = json.loads(stdout_buffer.getvalue())
+            file_payload = json.loads((project_dir / "build" / "rebuild_result.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stdout_payload["summary"]["passed"], 1)
+            self.assertEqual(stdout_payload["targets"][0]["artifacts"][0]["sha256"], "ABC")
+            self.assertNotIn("compilerLog", stdout_payload["targets"][0])
+            self.assertNotIn("steps", stdout_payload["targets"][0])
+            self.assertNotIn("large compiler log", json.dumps(stdout_payload))
+            self.assertEqual(file_payload["targets"][0]["compilerLog"], "large compiler log")
+            self.assertEqual(file_payload["targets"][0]["steps"][0]["stdout"], "large stdout")
+            self.assertEqual(file_payload["agentSummary"], stdout_payload)
 
     def test_main_passes_workspace_path_into_gcc_discovery(self) -> None:
         with make_temp_dir() as temp_dir:

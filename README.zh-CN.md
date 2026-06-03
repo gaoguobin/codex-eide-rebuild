@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/gaoguobin/codex-eide-rebuild/actions/workflows/ci.yml/badge.svg)](https://github.com/gaoguobin/codex-eide-rebuild/actions/workflows/ci.yml)
 
-面向 Codex 和 Claude Code 的 EIDE / Embedded IDE for VS Code 重建 Agent Skill。它通过 Windows-first Python runner 现场生成 `builder.params`，调用 EIDE `unify_builder`，并把编译日志、产物、内存占用、栈报告和环境诊断整理成单个 JSON 结果。
+面向 Codex 和 Claude Code 的 EIDE / Embedded IDE for VS Code 重建 Agent Skill。它通过 Windows-first Python runner 现场生成 `builder.params`，调用 EIDE `unify_builder`，并把编译日志、产物、内存占用、栈报告和环境诊断整理成 compact 或完整 JSON 结果。
 
 [English](README.md) · [Agent Skill](#agent-skill-和可发现性) · [安装](#安装) · [验证](#验证) · [输出协议](#输出协议) · [安全边界](#安全边界) · [Plugin readiness](#plugin-readiness) · [开发](#开发)
 
 ## 为什么需要
 
-这个项目适合已经能在本机 EIDE 正常编译的固件工程，让 Agent 以同样的 rebuild 语义做验证。它避免依赖 VS Code bridge 注册链路，把 Agent 侧协议简化为：执行一个 runner，读取一个完整 JSON。
+这个项目适合已经能在本机 EIDE 正常编译的固件工程，让 Agent 以同样的 rebuild 语义做验证。它避免依赖 VS Code bridge 注册链路，把 Agent 侧协议简化为：执行一个 runner，读取一个 compact JSON summary，完整 JSON 落盘保留。
 
 Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里拿到失败步骤、compiler log、artifact、stack report 等定位信息。
 
@@ -16,13 +16,13 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 
 | 能力 | 含义 |
 | --- | --- |
-| Agent-ready JSON | 输出包含 `ok`、`errorCode`、target summary、结构化 failures、diagnostics、产物 hash、日志、步骤和 transcript 的完整 JSON。 |
+| Agent-ready JSON | 正常 Agent 使用 compact `agentSummary`，完整 JSON 带日志、步骤和 transcript 保存在 `build/rebuild_result.json`。 |
 | 新鲜 build parameters | 每次 rebuild 前读取 `.eide/eide.yml`、`.eide/env.ini`、`.eide/files.options.yml` 和 workspace GCC 配置生成 `builder.params`。 |
 | EIDE rebuild 语义 | 调用 `dotnet exec --roll-forward Major <unify_builder.dll> -p <builder.params> --rebuild`。 |
 | 工具自动发现 | 自动发现 EIDE extension tools、model files、`unify_builder`、`dotnet` 和 workspace 配置的 GCC root。 |
 | 环境诊断 | `doctor` 输出结构化 `toolChecks`、PyYAML 状态和 .NET runtime probing 结果。 |
 | 超时保护 | 编译步骤 60 秒超时后返回 `STEP_TIMEOUT`。 |
-| Subagent 适配 | 长日志 rebuild 可以交给 worker subagent，主 Agent 只处理 JSON 结果。 |
+| Subagent 适配 | 长日志 rebuild 可以交给 worker subagent，主 Agent 只处理 compact summary 和 `resultPath`。 |
 | 同步护栏 | CI 校验 shared runtime 和 skill bundle 内副本保持一致。 |
 
 ## 兼容性
@@ -120,20 +120,22 @@ python skills/eide-rebuild/scripts/eide_rebuild.py doctor
 对 workspace 或工程目录执行 rebuild：
 
 ```powershell
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
 ```
 
 Agent 应按下面规则处理结果：
 
-- 从 `stdout` 读取一个完整 JSON。
+- 从 `stdout` 读取 compact JSON summary。
 - `exitCode=0` 表示成功。
 - `exitCode=6` 表示编译失败。
 - 其它非零 exit code 表示环境、配置、runtime 或超时问题。
 - 优先查看 `targets[].failures`、`targets[].diagnostics` 和 `targets[].artifacts`。
 - 汇报最终固件身份时使用 `targets[].artifacts[].sha256`。
-- 保留 `compilerLog`、`steps`、`artifacts`、`transcript` 供进一步分析。
+- 需要深入分析时，从 `resultPath` 读取完整 JSON 里的 `compilerLog`、`steps`、`transcript`。
 
 ## 输出协议
+
+常规 Agent 执行时 stdout 是 compact summary：
 
 ```json
 {
@@ -142,6 +144,8 @@ Agent 应按下面规则处理结果：
   "exitCode": 0,
   "errorCode": "OK",
   "mode": "rebuild-all",
+  "summary": { "discovered": 1, "passed": 1, "failed": 0 },
+  "resultPath": "C:/work/demo/build/rebuild_result.json",
   "targets": [
     {
       "name": "Debug",
@@ -164,13 +168,15 @@ Agent 应按下面规则处理结果：
 }
 ```
 
+完整结果始终写入 `resultPath`。只有明确需要把完整 JSON 打到 stdout 时，才省略 `--stdout` 或使用 `--stdout full`。
+
 ## 常用命令
 
 Agent 应把 runner 当作事实来源：
 
 ```powershell
 python skills/eide-rebuild/scripts/eide_rebuild.py doctor
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
 python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"
 ```
