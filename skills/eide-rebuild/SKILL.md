@@ -33,7 +33,7 @@ Decision table:
 Run:
 
 ```powershell
-python scripts/eide_rebuild.py rebuild <workspace-or-project-path> --stdout summary
+python scripts/eide_rebuild.py rebuild <workspace-or-project-path> --stdout minimal
 ```
 
 The relative `scripts/eide_rebuild.py` path is relative to this installed skill directory. Host integrations can use their own installed absolute runner path.
@@ -47,10 +47,11 @@ python scripts/eide_rebuild.py doctor
 ## Result handling
 
 - Treat the runner as the source of truth.
-- Prefer `--stdout summary` for normal agent work. It prints a compact JSON summary and still writes the complete result to `resultPath`.
+- Prefer `--stdout minimal` for normal agent work. It prints bounded JSON status and still writes the complete result to `resultPath`.
+- Use `--stdout summary` only when stdout needs per-target artifacts, memory, source stats, failures, or diagnostics without opening `resultPath`.
 - Use `--stdout full` or omit `--stdout` only when the full JSON is explicitly needed on stdout.
-- First inspect `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, `targets[].ok`, `targets[].failures`, `targets[].diagnostics`, and `targets[].artifacts`.
-- On success, report only a low-noise summary by default: `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, failure count, diagnostic count, `resultPath`, and key artifact identity fields.
+- First inspect `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, `targets[].ok`, `targets[].failureCount`, `targets[].diagnosticCount`, `targets[].artifactCount`, and `resultPath`.
+- On success, report only a low-noise summary by default: `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, failure count, diagnostic count, artifact count, and `resultPath`.
 - Use `targets[].artifacts[].sha256` as artifact identity/provenance data. Do not treat hash changes across different rebuilds as success/failure evidence unless the user explicitly asks for reproducibility or deterministic build checks.
 - Keep the complete JSON available at `resultPath`; it includes `compilerLog`, `steps`, `artifacts`, and `transcript`.
 - Do not paste full logs or long artifact lists on successful builds.
@@ -62,7 +63,7 @@ python scripts/eide_rebuild.py doctor
 - Prefer the `eide-rebuild` custom agent when the user explicitly asks for subagent/delegated rebuild work and the host supports delegation.
 - Otherwise use direct runner execution for normal single-project requests.
 - Use generic worker subagents only when the host supports delegation, policy allows it, and the user explicitly asks for subagent/parallel/delegated/background work.
-- The worker should run the same Python runner with `--stdout summary`.
-- The worker should return only the compact summary stdout plus a short factual conclusion, not paste the full result JSON, full logs, or long artifact lists.
+- The worker should run the same Python runner with `--stdout minimal`.
+- The worker should return only the minimal stdout plus a short factual conclusion, not paste the full result JSON, full logs, or long artifact lists.
 - The main agent should keep `resultPath` available for follow-up analysis.
 - Do not run multiple rebuild workers against the same project/build directory concurrently.

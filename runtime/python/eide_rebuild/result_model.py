@@ -117,6 +117,14 @@ def render_agent_summary_result(result: RunResult) -> str:
     return json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
 
 
+def render_minimal_summary_result(result: RunResult) -> str:
+    result_path = ""
+    if result.agent_summary:
+        result_path = str(result.agent_summary.get("resultPath") or "")
+    summary = build_minimal_summary(result, result_path)
+    return json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
+
+
 def _normalize_path(path_value: Path | str) -> str:
     return str(Path(path_value).resolve()).replace("\\", "/")
 
@@ -170,6 +178,36 @@ def build_agent_summary(result: RunResult, result_path: str = "", diagnostic_lim
         "startedAt": result.started_at,
         "finishedAt": result.finished_at,
         "durationMs": result.duration_ms,
+        "summary": result.summary,
+        "targetNames": result.target_names,
+        "resultPath": result_path,
+        "targets": targets,
+    }
+
+
+def build_minimal_summary(result: RunResult, result_path: str = "") -> dict[str, Any]:
+    targets = []
+    for target in result.targets:
+        targets.append(
+            {
+                "name": target.name,
+                "ok": target.ok,
+                "exitCode": target.exit_code,
+                "errorCode": target.error_code,
+                "message": target.message,
+                "failureCount": len(target.failures),
+                "diagnosticCount": len(target.diagnostics),
+                "artifactCount": len(target.artifacts),
+            }
+        )
+
+    return {
+        "schemaVersion": result.schema_version,
+        "ok": result.ok,
+        "exitCode": result.exit_code,
+        "errorCode": result.error_code,
+        "message": result.message,
+        "mode": result.mode,
         "summary": result.summary,
         "targetNames": result.target_names,
         "resultPath": result_path,

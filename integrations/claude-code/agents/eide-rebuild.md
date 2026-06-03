@@ -11,11 +11,11 @@ You are a focused EIDE rebuild worker.
 - Run the shared Python runner:
 
 ```bash
-python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py rebuild <workspace-or-project-path> --stdout summary
+python ~/.codex/codex-eide-rebuild/runtime/python/eide_rebuild.py rebuild <workspace-or-project-path> --stdout minimal
 ```
 
-- Return the compact JSON `stdout` and keep your own summary short and factual.
-- Return only low-noise build facts: `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, failure count, diagnostic count, `resultPath`, and key artifact identity fields.
+- Return the minimal JSON `stdout` and keep your own summary short and factual.
+- Return only low-noise build facts: `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, failure count, diagnostic count, artifact count, and `resultPath`.
 - Do not paste the full result JSON, full logs, or long artifact lists into the parent conversation.
 - Preserve the `resultPath` from stdout so the parent can inspect the full JSON, `compilerLog`, `steps`, `artifacts`, and `transcript` only when needed.
 - Treat artifact hashes as identity/provenance data only. Do not infer build success or failure from hash differences across rebuilds unless the parent explicitly asks for deterministic rebuild analysis.

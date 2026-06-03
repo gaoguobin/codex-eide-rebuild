@@ -16,9 +16,11 @@ from .result_model import (
     TargetResult,
     build_agent_summary,
     build_error_result,
+    build_minimal_summary,
     build_run_result,
     render_agent_summary_result,
     render_json_result,
+    render_minimal_summary_result,
     write_run_result,
 )
 from .tools import (
@@ -51,6 +53,7 @@ __all__ = [
     "TargetResult",
     "build_agent_summary",
     "build_error_result",
+    "build_minimal_summary",
     "build_run_result",
     "build_unify_builder_command",
     "build_process_env",
@@ -72,6 +75,7 @@ __all__ = [
     "rebuild_target",
     "render_agent_summary_result",
     "render_json_result",
+    "render_minimal_summary_result",
     "resolve_project_input",
     "run_doctor",
     "run_step",
@@ -81,7 +85,7 @@ __all__ = [
 ]
 
 
-STDOUT_MODES = {"full", "summary"}
+STDOUT_MODES = {"full", "summary", "minimal"}
 
 
 def _resolve_project_input_or_raise(input_path: str) -> ProjectInput:
@@ -134,13 +138,15 @@ def _parse_rebuild_arguments(arguments: list[str]) -> tuple[str, str]:
         index += 1
 
     if stdout_mode not in STDOUT_MODES:
-        raise ExitError(2, f"Invalid --stdout value: {stdout_mode}. Expected full or summary.", "INVALID_ARGUMENT")
+        raise ExitError(2, f"Invalid --stdout value: {stdout_mode}. Expected full, summary, or minimal.", "INVALID_ARGUMENT")
     if len(paths) != 1:
         raise ExitError(2, "Missing command or path.", "WORKSPACE_NOT_FOUND")
     return paths[0], stdout_mode
 
 
 def _render_stdout_result(result: RunResult, stdout_mode: str) -> str:
+    if stdout_mode == "minimal":
+        return render_minimal_summary_result(result)
     if stdout_mode == "summary":
         return render_agent_summary_result(result)
     return render_json_result(result)

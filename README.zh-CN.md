@@ -8,7 +8,7 @@
 
 ## 为什么需要
 
-这个项目适合已经能在本机 EIDE 正常编译的固件工程，让 Agent 以同样的 rebuild 语义做验证。它避免依赖 VS Code bridge 注册链路，把 Agent 侧协议简化为：执行一个 runner，读取一个 compact JSON summary，完整 JSON 落盘保留。
+这个项目适合已经能在本机 EIDE 正常编译的固件工程，让 Agent 以同样的 rebuild 语义做验证。它避免依赖 VS Code bridge 注册链路，把 Agent 侧协议简化为：执行一个 runner，读取一个 minimal JSON 状态，完整 JSON 落盘保留。
 
 Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里拿到失败步骤、compiler log、artifact、stack report 等定位信息。
 
@@ -22,7 +22,7 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 | 工具自动发现 | 自动发现 EIDE extension tools、model files、`unify_builder`、`dotnet` 和 workspace 配置的 GCC root。 |
 | 环境诊断 | `doctor` 输出结构化 `toolChecks`、PyYAML 状态和 .NET runtime probing 结果。 |
 | 超时保护 | 编译步骤 60 秒超时后返回 `STEP_TIMEOUT`。 |
-| Subagent 适配 | Codex 和 Claude Code 都可以把长日志 rebuild 交给 worker subagent，主 Agent 只处理 compact summary 和 `resultPath`。 |
+| Subagent 适配 | Codex 和 Claude Code 都可以把长日志 rebuild 交给 worker subagent，主 Agent 只处理 minimal 状态和 `resultPath`。 |
 | 同步护栏 | CI 校验 shared runtime 和 skill bundle 内副本保持一致。 |
 
 ## 兼容性
@@ -46,7 +46,7 @@ Agent 可以先跑 `doctor`，再 rebuild 所有 EIDE target，并从 JSON 里�
 - 环境检查：`python skills/eide-rebuild/scripts/eide_rebuild.py doctor`
 - Codex custom agent 模板：`integrations/codex/agents/eide-rebuild.toml`（安装到 `~/.codex/agents/eide-rebuild.toml`）
 
-Codex 的 subagent 机制按官方设计需要用户显式要求。长日志或多工程 rebuild 时，建议直接说：`用 eide-rebuild 子代理 rebuild C:\work\demo\project.code-workspace`。如果当前 Codex surface 不能 spawn subagent，同一个 runner 仍可直接执行并返回 compact JSON stdout。
+Codex 的 subagent 机制按官方设计需要用户显式要求。长日志或多工程 rebuild 时，建议直接说：`用 eide-rebuild 子代理 rebuild C:\work\demo\project.code-workspace`。如果当前 Codex surface 不能 spawn subagent，同一个 runner 仍可直接执行并返回 minimal JSON stdout。
 
 索引公开 GitHub 仓库 Agent Skills 的工具，包括 SkillsMP-style GitHub indexers，可以通过上面的路径发现这个 skill。仓库同时提供明确的 skill metadata、稳定 skill 路径和 `.codex-plugin/plugin.json` discovery metadata。
 
@@ -123,22 +123,21 @@ python skills/eide-rebuild/scripts/eide_rebuild.py doctor
 对 workspace 或工程目录执行 rebuild：
 
 ```powershell
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout minimal
 ```
 
 Agent 应按下面规则处理结果：
 
-- 从 `stdout` 读取 compact JSON summary。
+- 从 `stdout` 读取 minimal JSON 状态。
 - `exitCode=0` 表示成功。
 - `exitCode=6` 表示编译失败。
 - 其它非零 exit code 表示环境、配置、runtime 或超时问题。
-- 优先查看 `targets[].failures`、`targets[].diagnostics` 和 `targets[].artifacts`。
-- 汇报最终固件身份时使用 `targets[].artifacts[].sha256`。
-- 需要深入分析时，从 `resultPath` 读取完整 JSON 里的 `compilerLog`、`steps`、`transcript`。
+- 优先查看 `targets[].failureCount`、`targets[].diagnosticCount` 和 `targets[].artifactCount`。
+- 需要 artifact 身份、SHA256 或深入分析时，从 `resultPath` 读取完整 JSON 里的 `compilerLog`、`steps`、`transcript`。
 
 ## 输出协议
 
-常规 Agent 执行时 stdout 是 compact summary：
+常规 Agent 执行时 stdout 是 minimal summary：
 
 ```json
 {
@@ -148,30 +147,24 @@ Agent 应按下面规则处理结果：
   "errorCode": "OK",
   "mode": "rebuild-all",
   "summary": { "discovered": 1, "passed": 1, "failed": 0 },
+  "targetNames": ["Debug"],
   "resultPath": "C:/work/demo/build/rebuild_result.json",
   "targets": [
     {
       "name": "Debug",
       "ok": true,
-      "builderParamsPath": "C:/work/demo/build/Debug/builder.params",
-      "compilerLogPath": "C:/work/demo/build/Debug/compiler.log",
-      "failures": [],
-      "diagnostics": [],
-      "artifacts": [
-        {
-          "path": "C:/work/demo/build/Debug/app.bin",
-          "fileName": "app.bin",
-          "kind": "bin",
-          "size": 139104,
-          "sha256": "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"
-        }
-      ]
+      "exitCode": 0,
+      "errorCode": "OK",
+      "message": "",
+      "failureCount": 0,
+      "diagnosticCount": 0,
+      "artifactCount": 1
     }
   ]
 }
 ```
 
-完整结果始终写入 `resultPath`。只有明确需要把完整 JSON 打到 stdout 时，才省略 `--stdout` 或使用 `--stdout full`。
+完整结果始终写入 `resultPath`。只有 stdout 明确需要 per-target artifacts、memory、source stats、failures 或 diagnostics 时，才使用 `--stdout summary`。只有明确需要把完整 JSON 打到 stdout 时，才省略 `--stdout` 或使用 `--stdout full`。
 
 ## 常用命令
 
@@ -179,7 +172,7 @@ Agent 应把 runner 当作事实来源：
 
 ```powershell
 python skills/eide-rebuild/scripts/eide_rebuild.py doctor
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout minimal
 python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"
 ```

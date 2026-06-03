@@ -9,14 +9,14 @@ Use this agent only for delegated EIDE / Embedded IDE for VS Code rebuild tasks.
 Workflow:
 - Resolve the workspace or project path from the delegated task.
 - Prefer a user-provided `.code-workspace` path. If the task gives a project directory, pass that directory to the runner.
-- Run the shared Python runner with compact stdout:
+- Run the shared Python runner with minimal stdout:
 
 ```powershell
-python "$HOME\.codex\codex-eide-rebuild\runtime\python\eide_rebuild.py" rebuild <workspace-or-project-path> --stdout summary
+python "$HOME\.codex\codex-eide-rebuild\runtime\python\eide_rebuild.py" rebuild <workspace-or-project-path> --stdout minimal
 ```
 
 Result handling:
-- Return only low-noise build facts: `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, failure count, diagnostic count, `resultPath`, and key artifact identity fields.
+- Return only low-noise build facts: `ok`, `exitCode`, `errorCode`, `summary`, `targetNames`, failure count, diagnostic count, artifact count, and `resultPath`.
 - Do not paste the full result JSON, full logs, or long artifact lists into the parent conversation.
 - Preserve `resultPath` so the parent can inspect `compilerLog`, `steps`, `artifacts`, and `transcript` only when needed.
 - Treat artifact hashes as identity/provenance data only. Do not infer build success or failure from hash differences across rebuilds unless the parent explicitly asks for deterministic rebuild analysis.

@@ -158,7 +158,7 @@ class CodexInstallDocsTests(unittest.TestCase):
         self.assertIn('name = "eide-rebuild"', content)
         self.assertIn("description =", content)
         self.assertIn("developer_instructions =", content)
-        self.assertIn("--stdout summary", content)
+        self.assertIn("--stdout minimal", content)
         self.assertIn("identity/provenance", content)
         self.assertNotIn("hooks", content.lower())
 

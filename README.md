@@ -10,7 +10,7 @@ Rebuild Embedded IDE for VS Code (EIDE) workspaces from Codex or Claude Code and
 
 ## Why
 
-This project is for firmware and embedded teams that already build EIDE projects locally and want agents to run the same rebuild flow without relying on VS Code bridge registration. It keeps the agent-facing protocol simple: one command in, one compact JSON summary out, with the complete JSON saved on disk.
+This project is for firmware and embedded teams that already build EIDE projects locally and want agents to run the same rebuild flow without relying on VS Code bridge registration. It keeps the agent-facing protocol simple: one command in, one minimal JSON status out, with the complete JSON saved on disk.
 
 The project is designed for real workspace validation. Agents can run `doctor`, rebuild all EIDE targets, inspect failed build steps, and quote the exact compiler log path and artifact paths without scraping terminal output by hand.
 
@@ -24,7 +24,7 @@ The project is designed for real workspace validation. Agents can run `doctor`, 
 | Tool discovery | Finds EIDE extension tools, model files, `unify_builder`, `dotnet`, and the GCC root configured by the workspace. |
 | Setup diagnostics | `doctor` reports structured `toolChecks`, PyYAML status, and .NET runtime probing results. |
 | Timeout guard | Long-running build steps return `STEP_TIMEOUT` after 60 seconds. |
-| Multi-agent fit | Codex and Claude Code can delegate long rebuilds to a worker subagent while the main agent keeps only the compact summary and `resultPath`. |
+| Multi-agent fit | Codex and Claude Code can delegate long rebuilds to a worker subagent while the main agent keeps only the minimal status and `resultPath`. |
 | Runtime sync guard | CI verifies the shared runner and bundled skill copy stay synchronized. |
 
 ## Compatibility
@@ -48,7 +48,7 @@ This repository includes one Agent Skill:
 - Environment check: `python skills/eide-rebuild/scripts/eide_rebuild.py doctor`
 - Codex custom agent template: `integrations/codex/agents/eide-rebuild.toml` (installed to `~/.codex/agents/eide-rebuild.toml`)
 
-Codex subagents are explicit by design. For long or multi-project rebuilds, ask Codex directly: `用 eide-rebuild 子代理 rebuild C:\work\demo\project.code-workspace`. If the current Codex surface cannot spawn subagents, the same runner still works directly with compact JSON stdout.
+Codex subagents are explicit by design. For long or multi-project rebuilds, ask Codex directly: `用 eide-rebuild 子代理 rebuild C:\work\demo\project.code-workspace`. If the current Codex surface cannot spawn subagents, the same runner still works directly with minimal JSON stdout.
 
 Tools that index public GitHub repositories for Agent Skills, including SkillsMP-style GitHub indexers, can discover the skill at the path above. This repository uses explicit skill metadata, a stable skill path, and `.codex-plugin/plugin.json` discovery metadata to make the bundled skill easy to identify.
 
@@ -125,22 +125,21 @@ python skills/eide-rebuild/scripts/eide_rebuild.py doctor
 Run a rebuild against a workspace file or project directory:
 
 ```powershell
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout minimal
 ```
 
 Expected agent behavior:
 
-- Read the compact JSON summary from `stdout`.
+- Read the minimal JSON status from `stdout`.
 - Treat `exitCode=0` as success.
 - Treat `exitCode=6` as build failure.
 - Use other non-zero exit codes for setup, configuration, runtime, or timeout failures.
-- Inspect `targets[].failures`, `targets[].diagnostics`, and `targets[].artifacts` first.
-- Use `targets[].artifacts[].sha256` when reporting final firmware identity.
-- Use `resultPath` for the complete JSON when deeper `compilerLog`, `steps`, or `transcript` analysis is needed.
+- Inspect `targets[].failureCount`, `targets[].diagnosticCount`, and `targets[].artifactCount` first.
+- Use `resultPath` for artifact identity, SHA256, complete JSON, deeper `compilerLog`, `steps`, or `transcript` analysis.
 
 ## Output Protocol
 
-Normal agent runs use compact stdout:
+Normal agent runs use minimal stdout:
 
 ```json
 {
@@ -150,30 +149,24 @@ Normal agent runs use compact stdout:
   "errorCode": "OK",
   "mode": "rebuild-all",
   "summary": { "discovered": 1, "passed": 1, "failed": 0 },
+  "targetNames": ["Debug"],
   "resultPath": "C:/work/demo/build/rebuild_result.json",
   "targets": [
     {
       "name": "Debug",
       "ok": true,
-      "builderParamsPath": "C:/work/demo/build/Debug/builder.params",
-      "compilerLogPath": "C:/work/demo/build/Debug/compiler.log",
-      "failures": [],
-      "diagnostics": [],
-      "artifacts": [
-        {
-          "path": "C:/work/demo/build/Debug/app.bin",
-          "fileName": "app.bin",
-          "kind": "bin",
-          "size": 139104,
-          "sha256": "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"
-        }
-      ]
+      "exitCode": 0,
+      "errorCode": "OK",
+      "message": "",
+      "failureCount": 0,
+      "diagnosticCount": 0,
+      "artifactCount": 1
     }
   ]
 }
 ```
 
-The complete result is always written to `resultPath`. Omit `--stdout` or pass `--stdout full` only when the full JSON is explicitly needed on stdout.
+The complete result is always written to `resultPath`. Use `--stdout summary` only when stdout needs per-target artifacts, memory, source stats, failures, or diagnostics. Omit `--stdout` or pass `--stdout full` only when the full JSON is explicitly needed on stdout.
 
 ## Common Commands
 
@@ -181,7 +174,7 @@ Agents should use the runner as the source of truth:
 
 ```powershell
 python skills/eide-rebuild/scripts/eide_rebuild.py doctor
-python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout summary
+python skills/eide-rebuild/scripts/eide_rebuild.py rebuild C:\work\demo\project.code-workspace --stdout minimal
 python .\scripts\sync_skill_runtime.py --check
 python -m unittest discover -s .\runtime\tests -p "test_*.py"
 ```
